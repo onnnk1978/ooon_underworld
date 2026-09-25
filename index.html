@@ -60,6 +60,8 @@ body{display:flex;flex-direction:column;align-items:center;
  letter-spacing:2px;
 }
 .title-btn:active{background:var(--white2);color:#111}
+.title-btn:disabled{opacity:.35;cursor:default}
+.title-btn:disabled:active{background:#0e1006;color:#f0ece0}
 #title-credit{font-size:calc(var(--font-sm) - 2px);color:#6a6050;margin-top:6px}
 
 /* ── ストーリー導入画面（内容は後で差し替え） ── */
@@ -208,6 +210,7 @@ body{display:flex;flex-direction:column;align-items:center;
  <img id="title-art" alt="">
  <div id="title-logo">OOON<span class="sub">underworld</span></div>
  <button class="title-btn" onclick="goToChargen()">はじめる</button>
+ <button class="title-btn" id="continue-btn" onclick="loadGame()" style="font-size:calc(var(--font-base) - 2px);padding:10px 40px;min-height:auto"> つづきから</button>
  <div id="title-credit">based on OOON rules</div>
 </div>
 
@@ -337,7 +340,10 @@ body{display:flex;flex-direction:column;align-items:center;
 <div id="hud">
   <div class="mh-top">
     <div class="mh-name" id="mh-name">-</div>
-    <button onclick="openStatusPanel()" title="ステータス" style="background:#150f06;border:1px solid var(--border);color:var(--white2);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:3px 8px;cursor:pointer;border-radius:2px"> ステータス</button>
+    <div style="display:flex;gap:4px">
+      <button onclick="saveGame()" title="セーブ" style="background:#150f06;border:1px solid var(--border);color:var(--white2);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:3px 8px;cursor:pointer;border-radius:2px">&#128190;</button>
+      <button onclick="openStatusPanel()" title="ステータス" style="background:#150f06;border:1px solid var(--border);color:var(--white2);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:3px 8px;cursor:pointer;border-radius:2px"> ステータス</button>
+    </div>
   </div>
   <div class="mh-bars" id="mh-bars"></div>
 </div>
@@ -1203,9 +1209,210 @@ const TITLE_ART_IMAGES = ['gate_entrance.webp', 'title_02.webp', 'title_03.webp'
  el.src = 'images/' + TITLE_ART_IMAGES[Math.floor(Math.random() * TITLE_ART_IMAGES.length)];
 })();
 
+// ══════════════════════════════════════════════
+// セーブ／ロード（OOON本家 saveGame/loadGame/autoSave/showSaveSlotUI から移植）。
+// 手動スロット3つ＋自動セーブ1つ。セーブ対象は player 本体に加え、フロアごとの
+// 罠・落とし格子・レバーの解決状態（trapCells/gateCells/interactCellsの
+// _resolved/open）と部屋イベントの解決状態（rooms[id]._resolved）。
+// 自動セーブは階段でフロアを移動した瞬間（enterFloor()）に実行される。
+// ══════════════════════════════════════════════
+const SAVE_SLOT_COUNT = 3;
+const SAVE_KEY_PREFIX = 'ooon_underworld_save_';
+const AUTOSAVE_KEY = 'ooon_underworld_autosave';
+
+function getSaveKey(slot){ return SAVE_KEY_PREFIX + slot; }
+
+function _captureFloorsState(){
+ const floorsState = {};
+ Object.keys(DUNGEON_FLOORS).forEach(floorNum => {
+  const floor = DUNGEON_FLOORS[floorNum];
+  const trapCells = {};
+  Object.keys(floor.trapCells || {}).forEach(k => { trapCells[k] = !!floor.trapCells[k]._resolved; });
+  const gateCells = {};
+  Object.keys(floor.gateCells || {}).forEach(k => { gateCells[k] = !!floor.gateCells[k].open; });
+  const interactCells = {};
+  Object.keys(floor.interactCells || {}).forEach(k => { interactCells[k] = !!floor.interactCells[k]._resolved; });
+  floorsState[floorNum] = { trapCells, gateCells, interactCells };
+ });
+ return floorsState;
+}
+
+function _captureRoomsState(){
+ const roomsState = {};
+ Object.keys(rooms).forEach(id => { roomsState[id] = !!rooms[id]._resolved; });
+ return roomsState;
+}
+
+function _buildSaveData(){
+ return {
+  player: JSON.parse(JSON.stringify(player)),
+  floor: dungeonData.floor,
+  floorsState: _captureFloorsState(),
+  roomsState: _captureRoomsState(),
+  savedAt: Date.now(),
+ };
+}
+
+function _applySaveData(data){
+ player = data.player;
+ dungeonData = DUNGEON_FLOORS[data.floor];
+
+ Object.keys(data.floorsState || {}).forEach(floorNum => {
+  const floor = DUNGEON_FLOORS[floorNum];
+  if (!floor) return;
+  const st = data.floorsState[floorNum];
+  Object.keys(st.trapCells || {}).forEach(k => { if (floor.trapCells[k]) floor.trapCells[k]._resolved = st.trapCells[k]; });
+  Object.keys(st.gateCells || {}).forEach(k => { if (floor.gateCells[k]) floor.gateCells[k].open = st.gateCells[k]; });
+  Object.keys(st.interactCells || {}).forEach(k => { if (floor.interactCells[k]) floor.interactCells[k]._resolved = st.interactCells[k]; });
+ });
+ Object.keys(data.roomsState || {}).forEach(id => { if (rooms[id]) rooms[id]._resolved = data.roomsState[id]; });
+
+ combatState = null;
+ imageFlipped = false;
+ lastCorridorVariant = null;
+ facingWallFromStraight = false;
+ _dungeonMessage = null;
+ _dungeonGameOverMessage = null;
+
+ document.getElementById('title-screen').classList.add('hidden');
+ document.getElementById('chargen-screen').classList.add('hidden');
+ document.getElementById('story-screen').classList.add('hidden');
+ document.getElementById('dice-test-screen').classList.add('hidden');
+ document.getElementById('dungeon-screen').classList.remove('hidden');
+ render();
+}
+
+// 自動セーブ。階段でのフロア移動（enterFloor()）からのみ呼ばれる。
+function autoSave(){
+ if (!player) return;
+ const data = _buildSaveData();
+ data.isAutoSave = true;
+ localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
+ showSaveToast(' 自動セーブ完了');
+}
+
+function loadAutoSave(){
+ const raw = localStorage.getItem(AUTOSAVE_KEY);
+ if (!raw) return;
+ try { _applySaveData(JSON.parse(raw)); } catch (e) {}
+}
+
+function saveGame(){
+ if (!player) return;
+ showSaveSlotUI('save');
+}
+
+// タイトル画面の「つづきから」ボタン、およびロードスロット選択から呼ばれる。
+function loadGame(){
+ showSaveSlotUI('load');
+}
+
+function _doSaveToSlot(slot){
+ localStorage.setItem(getSaveKey(slot), JSON.stringify(_buildSaveData()));
+ showSaveToast(`スロット${slot}にセーブしました`);
+}
+
+function getSlotInfo(slot){
+ const raw = localStorage.getItem(getSaveKey(slot));
+ if (!raw) return null;
+ try {
+  const d = JSON.parse(raw);
+  const dt = new Date(d.savedAt);
+  const ts = `${dt.getMonth() + 1}/${dt.getDate()} ${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}`;
+  return { name: d.player.name, race: d.player.race, type: d.player.type, level: d.player.level, ts };
+ } catch (e) { return null; }
+}
+
+function hasAnySaveData(){
+ if (localStorage.getItem(AUTOSAVE_KEY)) return true;
+ for (let s = 1; s <= SAVE_SLOT_COUNT; s++) {
+  if (localStorage.getItem(getSaveKey(s))) return true;
+ }
+ return false;
+}
+
+function updateContinueButtonState(){
+ const btn = document.getElementById('continue-btn');
+ if (btn) btn.disabled = !hasAnySaveData();
+}
+
+// セーブ／ロード共通のスロット選択パネル（動的生成。OOON本家 showSaveSlotUI() 相当）。
+function showSaveSlotUI(mode){
+ const existing = document.getElementById('save-slot-panel');
+ if (existing) { existing.remove(); return; }
+
+ const panel = document.createElement('div');
+ panel.id = 'save-slot-panel';
+ panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--ink);border:2px solid var(--border);border-radius:6px;padding:16px;z-index:9998;min-width:260px;max-width:90vw;box-shadow:0 0 30px rgba(0,0,0,0.7);font-family:system-ui,sans-serif';
+ panel.innerHTML = `<div style="color:#e8e0d8;font-size:calc(var(--font-sm) - 1px);margin-bottom:10px;text-align:center"> ${mode === 'load' ? 'ロード' : 'セーブ'}スロット選択</div>`;
+
+ for (let s = 1; s <= SAVE_SLOT_COUNT; s++) {
+  const info = getSlotInfo(s);
+  const row = document.createElement('div');
+  row.style.cssText = 'border:1px solid var(--border);border-radius:3px;padding:8px;margin:4px 0;cursor:pointer;background:var(--panel)';
+  const desc = info
+   ? `<span style="color:#ece8e0">${info.name}</span> <span style="color:var(--dim);font-size:calc(var(--font-sm) - 2px)">${RACE_LABEL_JP[info.race] || info.race}・${TYPE_LABEL_JP[info.type] || info.type} Lv${info.level}［${info.ts}］</span>`
+   : `<span style="color:var(--dim)">── 空き ──</span>`;
+  row.innerHTML = `<div style="font-size:calc(var(--font-sm) - 3px);color:var(--dim);margin-bottom:2px">スロット${s}</div>${desc}`;
+  row.onclick = () => {
+   if (mode === 'load') {
+    if (!info) return;
+    panel.remove();
+    try { _applySaveData(JSON.parse(localStorage.getItem(getSaveKey(s)))); } catch (e) {}
+   } else {
+    if (info && !confirm(`スロット${s}（${info.name}）に上書きしますか？`)) return;
+    panel.remove();
+    _doSaveToSlot(s);
+   }
+  };
+  panel.appendChild(row);
+ }
+
+ // 自動セーブ枠（ロード時のみ表示）
+ if (mode === 'load') {
+  const asRaw = localStorage.getItem(AUTOSAVE_KEY);
+  if (asRaw) {
+   try {
+    const asData = JSON.parse(asRaw);
+    const dt = new Date(asData.savedAt);
+    const ts = `${dt.getMonth() + 1}/${dt.getDate()} ${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}`;
+    const row = document.createElement('div');
+    row.style.cssText = 'border:1px solid var(--border);border-radius:3px;padding:8px;margin:4px 0;cursor:pointer;background:var(--panel2)';
+    row.innerHTML = `<div style="font-size:calc(var(--font-sm) - 3px);color:var(--dim);margin-bottom:2px">自動セーブ</div><span style="color:#ece8e0">${asData.player.name}</span> <span style="color:var(--dim);font-size:calc(var(--font-sm) - 2px)">［${ts}］</span>`;
+    row.onclick = () => { panel.remove(); loadAutoSave(); };
+    panel.appendChild(row);
+   } catch (e) {}
+  }
+ }
+
+ const cancelBtn = document.createElement('button');
+ cancelBtn.textContent = 'キャンセル';
+ cancelBtn.style.cssText = 'margin-top:8px;width:100%;background:none;border:1px solid var(--border);color:var(--dim);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 2px);padding:8px;cursor:pointer;border-radius:3px';
+ cancelBtn.onclick = () => panel.remove();
+ panel.appendChild(cancelBtn);
+
+ document.body.appendChild(panel);
+}
+
+// 簡易トースト通知（OOON本家 showSaveToast() 相当）
+function showSaveToast(msg){
+ let toast = document.getElementById('save-toast');
+ if (!toast) {
+  toast = document.createElement('div');
+  toast.id = 'save-toast';
+  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);border:1px solid var(--border);color:#f0ece0;padding:10px 18px;border-radius:4px;font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 1px);z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none';
+  document.body.appendChild(toast);
+ }
+ toast.textContent = msg;
+ toast.style.opacity = '1';
+ clearTimeout(toast._hideTimer);
+ toast._hideTimer = setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+}
+
 // 初期表示
 updateRaceInfo();
 updateAddsPreview();
+updateContinueButtonState();
 
 
 // ══════════════════════════════════════════════
@@ -1732,6 +1939,7 @@ function triggerPitTrap(trap){
 }
 
 // フロア間の移動（階段など）。dungeonDataの参照を切り替えて指定座標へ配置する。
+// 移動が完了した時点で自動セーブする。
 function enterFloor(floorNum, x, y, facing){
   dungeonData = DUNGEON_FLOORS[floorNum];
   player.x = x;
@@ -1741,6 +1949,7 @@ function enterFloor(floorNum, x, y, facing){
   lastCorridorVariant = null;
   facingWallFromStraight = false;
   render();
+  autoSave();
 }
 
 function render() {
