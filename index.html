@@ -1621,16 +1621,6 @@ const DUNGEON_FLOORS = {
     // レバーなど、通路上に立つと操作できる設備。roomの選択肢とは別枠の軽量な仕組み。
     interactCells: {
       "15,9": { id: "lever_1", label: "東の壁のレバーを引く", action: "pull_lever_1" }
-    },
-    // (1,9)の落とし格子は開閉状態でテキストが変わるため、静的なtileFlavorではなく関数で持つ。
-    dynamicFlavor(x, y) {
-      if (x === 1 && y === 9) {
-        const gate = this.gateCells['0,9'];
-        return gate.open
-          ? '西の壁の落とし格子は開かれている。道はさらに西へ続いているが、その先はまだ地図にない。'
-          : null;
-      }
-      return null;
     }
   }
 };
