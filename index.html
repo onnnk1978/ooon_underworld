@@ -1484,6 +1484,7 @@ const DAYS_PER_MONTH = 30;
 const MONTHS_PER_YEAR = 12;
 const DAYS_PER_YEAR = DAYS_PER_MONTH * MONTHS_PER_YEAR;
 const MINUTES_PER_STEP = 5;
+const MINUTES_PER_EXAMINE = 30;
 
 let GAME_TIME = { totalMinutes: 0, startYear: 400 };
 
@@ -1505,9 +1506,9 @@ function formatGameDateTime(){
  return `${d.year}年 ${MONTHS_JP[d.month - 1]} ${d.day}日 ${String(d.hour).padStart(2, '0')}:${String(d.minute).padStart(2, '0')}`;
 }
 
-// ダンジョン内を1歩進むごとに呼ばれ、時計をMINUTES_PER_STEP分だけ進める。
-function advanceGameTime(){
- GAME_TIME.totalMinutes += MINUTES_PER_STEP;
+// 時計をminutes分だけ進める（省略時はMINUTES_PER_STEP＝1歩分）。
+function advanceGameTime(minutes){
+ GAME_TIME.totalMinutes += (minutes != null ? minutes : MINUTES_PER_STEP);
 }
 
 // ============================================================
@@ -2053,6 +2054,8 @@ const EXAMINE_NOTHING_MESSAGES = [
   '注意深く見回したが、何も見つからなかった。',
 ];
 function examineSurroundings(){
+  advanceGameTime(MINUTES_PER_EXAMINE);
+
   const posKey = `${player.x},${player.y}`;
   const cell = dungeonData.examineCells && dungeonData.examineCells[posKey];
 
@@ -2231,12 +2234,13 @@ function render() {
     }
 
     const front = DIRS[player.facing];
-    if (isFloor(player.x + front.dx, player.y + front.dy)) {
-      const btn = document.createElement('button');
-      btn.textContent = '前進';
-      btn.onclick = () => { imageFlipped = false; moveTo(player.x + front.dx, player.y + front.dy); };
-      choices.appendChild(btn);
-    }
+    const canMoveForward = isFloor(player.x + front.dx, player.y + front.dy);
+    const forwardBtn = document.createElement('button');
+    forwardBtn.textContent = '前進';
+    forwardBtn.onclick = canMoveForward
+      ? () => { imageFlipped = false; moveTo(player.x + front.dx, player.y + front.dy); }
+      : () => { _dungeonMessage = '前方は壁だ。'; render(); };
+    choices.appendChild(forwardBtn);
     const turnLeftBtn = document.createElement('button');
     turnLeftBtn.textContent = '左を向く';
     turnLeftBtn.onclick = () => {
