@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>OOON underworld</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+
+/* ══════════════════════════════════════════════
+   OOON (tt5_engine.html) からキャラ作成画面のみを抽出したもの。
+   CSS変数・レイアウトクラスはOOON本家のものをそのまま流用。
+   ══════════════════════════════════════════════ */
+:root{
+ --bg:#0d0a07;--screen:#130f0a;
+ --border:#505050;--border2:#686868;
+ --gold:#f0ece0;--gold2:#faf4e8;--white:#faf4e8;
+ --text:#f0ece0;--dim:#c8b89a;
+ --red:#c05040;--nature2:#f0ece0;--white2:#f4ede0;
+ --font-base:14px;
+ --font-sm:calc(var(--font-base) - 2px);
+ --font-lg:calc(var(--font-base) + 2px);
+ --info:#c0b098;--info2:#c0b098;
+ --ink:#111111;--panel:#1a1a1a;--panel2:#2a2a2a;
+ --earth:#404040;
+ --mid:#d0c0a8;--danger:#c04030;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;background:var(--bg)}
+body{display:flex;flex-direction:column;align-items:center;
+ font-family:system-ui,sans-serif;color:var(--text)}
+
+#app{width:100%;max-width:480px;height:100vh;display:flex;flex-direction:column;background:var(--screen)}
+
+/* ── タイトル画面 ── */
+#title-screen{
+ width:100%;height:100vh;max-width:480px;display:flex;flex-direction:column;
+ align-items:center;justify-content:center;background:var(--screen);
+ padding:24px;text-align:center;gap:22px;
+}
+#title-logo{
+ font-family:'Press Start 2P',system-ui,sans-serif;
+ color:#f0ece0;font-size:26px;line-height:1.7;
+ text-shadow:0 0 6px rgba(240,236,224,0.35), 0 0 14px rgba(200,150,60,0.25);
+ letter-spacing:1px;
+}
+#title-logo .sub{
+ display:block;font-size:13px;margin-top:10px;color:#c8a860;
+ text-shadow:0 0 8px rgba(200,150,60,0.4);
+}
+#title-tagline{
+ font-size:calc(var(--font-base) - 1px);color:#c8b8a0;line-height:2;max-width:340px;
+}
+.title-btn{
+ font-family:system-ui,sans-serif;font-size:var(--font-base);
+ padding:16px 40px;cursor:pointer;border-radius:4px;min-height:54px;
+ border:2px solid #b0a080;background:#0e1006;color:#f0ece0;
+ letter-spacing:2px;
+}
+.title-btn:active{background:var(--white2);color:#111}
+#title-credit{font-size:calc(var(--font-sm) - 2px);color:#6a6050;margin-top:6px}
+
+/* ── ストーリー導入画面（内容は後で差し替え） ── */
+#story-screen{
+ width:100%;height:100vh;max-width:480px;display:flex;flex-direction:column;
+ background:var(--screen);padding:20px 16px;gap:14px;
+}
+#story-screen h2{color:#f0ece0;font-size:calc(var(--font-base) + 1px);text-align:center}
+#story-text{
+ flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+ background:var(--panel);border:1px solid var(--border);border-radius:4px;
+ padding:16px;font-size:calc(var(--font-base) + 1px);line-height:2.1;color:#e0d8c8;
+ white-space:pre-wrap;
+}
+#story-roll-result{
+ background:var(--panel);border:1px solid var(--border);border-radius:4px;
+ padding:12px 16px;font-size:var(--font-base);line-height:1.8;color:#f0ece0;
+ white-space:pre-wrap;
+}
+#story-roll-result.fail{border-color:#8a3a3a;color:#e8b8b0}
+#story-roll-result.success{border-color:#3a6a4a;color:#c8e8c8}
+
+/* ── 能力値テスト専用画面（OOON本家の #dice-area をそのまま流用） ── */
+#dice-test-screen{
+ width:100%;height:100vh;max-width:480px;display:flex;flex-direction:column;
+ align-items:center;justify-content:center;background:var(--screen);padding:20px 16px;
+}
+#dice-area{
+ width:100%;margin:0;padding:18px;
+ background:#0e0c06;border:2px solid #484848;border-radius:4px;
+}
+#dice-area h3{color:#f0ece0;margin-bottom:8px;font-size:calc(var(--font-base) + 1px);text-align:center}
+#dd{color:var(--white);margin-bottom:10px;line-height:2.4;font-size:calc(var(--font-lg) + 4px);text-align:center}
+.dr-result{font-size:calc(var(--font-lg) + 4px);color:#f0ece0;margin:8px 0;min-height:40px;
+ display:flex;align-items:center;justify-content:center;text-align:center;line-height:2}
+.roll-btn{
+ background:#120f06;border:2px solid #505050;color:#f0ece0;
+ font-family:system-ui,sans-serif;font-size:var(--font-base);
+ padding:15px;cursor:pointer;width:100%;margin-top:8px;border-radius:4px;min-height:54px;
+}
+.roll-btn:active{background:var(--white2)}
+.roll-btn:disabled{opacity:.4;cursor:default}
+
+
+/* ── chargen（OOON本家のCSSをそのまま） ── */
+#chargen{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 12px;display:flex;flex-direction:column;gap:10px}
+#chargen h2{color:#f0ece0;font-size:calc(var(--font-base) + 1px);text-align:center;margin-bottom:4px}
+.cg-hint{font-size:var(--font-base);color:#d0c8b8;line-height:2.3}
+.cg-section{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:10px}
+.cg-section h3{font-size:var(--font-base);color:#c8b8a0;margin-bottom:8px}
+.cg-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.cg-row label{font-size:calc(var(--font-base) + 1px);color:#f0ece0}
+.cg-row input[type=number]{
+ background:var(--ink);border:2px solid var(--border);color:var(--white2);
+ font-family:system-ui,sans-serif;font-size:calc(var(--font-base) + 1px);
+ width:70px;padding:7px;text-align:center;border-radius:3px;
+}
+.cg-row input[type=number][readonly]{
+ background:var(--ink);color:#e0d8c8;border-color:#d8d0c0;cursor:default;
+}
+.cg-row select{
+ background:var(--ink);border:2px solid var(--border);color:var(--white2);
+ font-family:system-ui,sans-serif;font-size:var(--font-base);
+ padding:7px;border-radius:3px;min-width:130px;
+}
+.race-info{font-size:calc(var(--font-lg) + 4px);color:#e8e0d0;margin-top:4px;line-height:2;padding:0 4px}
+.type-card{
+ background:#150f08;border:2px solid var(--border);border-radius:4px;
+ padding:12px;cursor:pointer;margin-bottom:7px;
+}
+.type-card.selected{border-color:#f0ece0;background:#1e1608}
+.type-card h4{font-size:calc(var(--font-base) + 1px);margin-bottom:5px}
+.type-card.warrior h4{color:#f0e8e8}
+.type-card.wizard h4{color:#f0ece8}
+.type-card.rogue h4{color:var(--white2)}
+.type-card p{font-size:calc(var(--font-lg) + 4px);color:#e8e0d0;line-height:2.1}
+.cg-btn{
+ font-family:system-ui,sans-serif;font-size:var(--font-base);
+ padding:15px;cursor:pointer;width:100%;border-radius:4px;min-height:54px;border:2px solid;
+}
+.cg-btn.rand{background:#0e1006;border-color:#a0a0a0;color:#e0d8c8}
+.cg-btn.rand:active{background:#1a1408}
+.cg-btn.start{background:#0e1006;border-color:#b0a080;color:#f0ece0}
+.cg-btn.start:active{background:var(--white2)}
+.stat-preview{
+ background:#0c0906;border:1px solid var(--earth);border-radius:3px;
+ padding:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:4px;
+}
+.sp-cell{text-align:center;font-size:calc(var(--font-lg) + 4px);color:#d0c8b8}
+.sp-cell span{display:block;font-size:calc(var(--font-lg) + 4px);color:var(--white);margin-top:2px}
+.hidden{display:none !important}
+
+/* ── 結果プレビュー（このプロトタイプ独自の追加部分） ── */
+#result-panel{background:#0c0906;border:1px solid var(--earth);border-radius:4px;padding:12px;margin-top:6px;white-space:pre-wrap;font-size:calc(var(--font-sm) - 1px);color:#c8c0b0;line-height:1.6}
+.note-box{font-size:calc(var(--font-sm) - 1px);color:#8a8070;padding:6px 4px;line-height:1.8}
+
+
+/* ── ダンジョンビュー側スタイル ── */
+
+  body { background:#111; color:#eee; font-family: sans-serif; display:flex; flex-direction:column; align-items:center; padding:20px; }
+  h2 { margin-bottom: 4px; }
+  .note { color:#888; font-size:12px; margin-bottom:16px; }
+  #viewArea { width:480px; height:320px; background:#000; border:2px solid #555; position:relative; overflow:hidden; }
+  #debugInfo { width:480px; font-size:12px; color:#999; margin-top:6px; white-space:pre-line; }
+  #description { width:480px; margin-top:10px; font-size:15px; line-height:1.6; min-height:40px; white-space:pre-line; }
+  #choices { width:480px; display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  button { background:#333; color:#eee; border:1px solid #666; padding:8px 14px; cursor:pointer; font-size:14px; border-radius:4px; }
+  button:hover { background:#444; }
+  #minimap { margin-top:24px; }
+  #minimap table { border-collapse: collapse; }
+  #minimap td { width:20px; height:20px; text-align:center; font-size:11px; border:1px solid #222; }
+  .wall { background:#444; }
+  .floor { background:#222; }
+  .room { background:#341; color:#dfa; }
+  .player { background:#c33; color:#fff; font-weight:bold; }
+
+</style>
+</head>
+<body>
+
+<div id="title-screen">
+ <div id="title-logo">OOON<span class="sub">underworld</span></div>
+ <div id="title-tagline">OOONの世界の地下に広がる、語られざる迷宮。<br>Tunnels &amp; Trolls 5th Editionルール準拠の3Dダンジョンクローラー。</div>
+ <button class="title-btn" onclick="goToChargen()">はじめる</button>
+ <div id="title-credit">based on OOON rules</div>
+</div>
+
+<div id="chargen-screen" class="hidden">
+
+<!-- ══════════ CHAR GEN（OOON本家のHTML構造をそのまま） ══════════ -->
+<div id="chargen">
+ <h2> キャラクター作成</h2>
+ <div class="cg-hint">3D6を各能力値に振る。後で変更できない！</div>
+
+ <div class="cg-section">
+ <h3> 能力値</h3>
+ <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:8px">
+  <span style="font-size:calc(var(--font-sm) - 1px);color:#c8b8a0" id="stat-edit-label">手動入力：オフ</span>
+  <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer">
+   <input type="checkbox" id="stat-edit-toggle" onchange="toggleStatEdit()" style="opacity:0;width:0;height:0;position:absolute">
+   <span id="stat-edit-track" style="position:absolute;inset:0;border-radius:12px;background:#2a1a0a;border:1px solid #484848;transition:background 0.2s"></span>
+   <span id="stat-edit-thumb" style="position:absolute;left:2px;top:2px;width:18px;height:18px;border-radius:50%;background:#665533;transition:left 0.2s,background 0.2s"></span>
+  </label>
+ </div>
+ <div class="cg-row"><label>強さ</label><input type="number" id="a-st" value="10" min="1" max="99" readonly></div>
+ <div class="cg-row"><label>知力</label><input type="number" id="a-iq" value="10" min="1" max="99" readonly></div>
+ <div class="cg-row"><label>運　</label><input type="number" id="a-lk" value="10" min="1" max="99" readonly></div>
+ <div class="cg-row"><label>体力</label><input type="number" id="a-con" value="10" min="1" max="99" readonly></div>
+ <div class="cg-row"><label>器用さ</label><input type="number" id="a-dex" value="10" min="1" max="99" readonly></div>
+ <div class="cg-row"><label>魅力</label><input type="number" id="a-chr" value="10" min="1" max="99" readonly></div>
+ <div class="cg-row"><label>素早さ</label><input type="number" id="a-spd" value="10" min="1" max="99" readonly></div>
+ <div class="stat-preview" id="adds-preview">
+ <div class="sp-cell">戦闘力修正<span id="prev-adds">0</span></div>
+ <div class="sp-cell">積載量<span id="prev-wt">1000</span></div>
+ <div class="sp-cell">開始所持金<span id="prev-gp">?</span></div>
+ <div class="sp-cell">レベル<span>1</span></div>
+ </div>
+ <div style="font-size:calc(var(--font-lg) + 4px);color:#c8b8a0;margin:6px 4px 2px" id="stat-after-race-label">◆ 種族補正後ステータス</div>
+ <div class="stat-preview" id="stat-after-race" style="grid-template-columns:repeat(7,1fr)"></div>
+ <button class="cg-btn rand" onclick="rollStats()" style="margin-top:10px"> サイコロを振る（3D6）</button>
+ </div>
+
+ <div class="cg-section">
+ <h3> 種族</h3>
+ <div class="cg-row">
+ <label>種族</label>
+ <select id="a-race" onchange="updateRaceInfo();updateAddsPreview();updateSizeDisplay()">
+ <option value="human">人間</option>
+ <option value="elf">エルフ</option>
+ <option value="dwarf">ドワーフ</option>
+ <option value="halfling">ハーフリング</option>
+ <option value="fairy">フェアリー</option>
+ <option value="leprechaun">レプラコーン</option>
+ <option value="troll">トロール（上級者向け）</option>
+ <option value="ogre">オーガ（上級者向け）</option>
+ <option value="orc">オーク</option>
+ <option value="goblin">ゴブリン</option>
+ </select>
+ </div>
+ <div class="race-info" id="race-info">人間: 全能力値 ×1（補正なし）</div>
+ </div>
+
+ <div class="cg-section">
+ <h3> 体格</h3>
+ <div class="cg-row">
+  <label>身長</label>
+  <input type="number" id="a-height" value="" placeholder="?" readonly style="width:80px">
+  <span style="color:#c8b8a0;font-size:calc(var(--font-sm) - 1px);margin-left:4px">cm</span>
+  <button onclick="rollHeight()" style="background:none;border:1px solid #444;color:#e0d8c8;font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 6px;cursor:pointer;border-radius:2px;margin-left:8px">振る</button>
+ </div>
+ <div class="cg-row" style="margin-top:6px">
+  <label>体重</label>
+  <input type="number" id="a-weight" value="" placeholder="?" readonly style="width:80px">
+  <span style="color:#c8b8a0;font-size:calc(var(--font-sm) - 1px);margin-left:4px">kg</span>
+  <button onclick="rollWeight()" style="background:none;border:1px solid #444;color:#e0d8c8;font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 6px;cursor:pointer;border-radius:2px;margin-left:8px">振る</button>
+ </div>
+ <div class="cg-hint" style="margin-top:6px">人間基準（身長125〜210cm・体重35〜170kg）でランダムに決め、種族補正をかけます。それぞれ何度でも振り直せます。</div>
+ </div>
+
+ <div class="cg-section">
+ <h3> 職業</h3>
+ <div class="type-card warrior selected" id="card-warrior" onclick="selectType('warrior')">
+ <h4> 戦士</h4>
+ <p>防具・盾の防護値が2倍。魔法は使えないが武器は何でも使える。強さ重視向き。条件を満たせば片手武器を2つ同時装備できる。</p>
+ </div>
+ <div class="type-card wizard" id="card-wizard" onclick="selectType('wizard')">
+ <h4> 魔法使い</h4>
+ <p>全レベル1呪文を習得済み。ダガー・杖のみ。知力≥10、器用さ≥8 必須。</p>
+ </div>
+ <div class="type-card rogue" id="card-rogue" onclick="selectType('rogue')">
+ <h4> 盗賊</h4>
+ <p>防具ボーナスなし。盗賊ギルドで呪文を習得可能（通常の2倍の費用）。能力値要件なし。</p>
+ </div>
+ <div id="type-warn" class="cg-hint hidden" style="color:#e0d0d0">※ 魔法使いは知力≥10、器用さ≥8が必要です</div>
+ </div>
+
+ <div class="cg-section">
+ <h3> 名前と所持金</h3>
+ <div class="cg-row">
+ <label>名前</label>
+ <input type="text" id="a-name" value="Mantaro" style="background:var(--ink);border:2px solid var(--border);color:var(--white2);font-family:system-ui,sans-serif;font-size:var(--font-base);padding:7px;border-radius:3px;width:150px">
+ <button onclick="document.getElementById('a-name').value=pickNPC()" style="background:none;border:1px solid #444;color:#e0d8c8;font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 6px;cursor:pointer;border-radius:2px;margin-left:6px" title="ランダムな名前">ランダム</button>
+ </div>
+ <div class="cg-hint" style="margin-top:6px">開始GP: 3D6×10（<button onclick="rollGold()" style="background:none;border:1px solid #444;color:#e0d8c8;font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 6px;cursor:pointer;border-radius:2px">振る</button>）= <span id="gp-result" style="color:#f0ece0">?</span> GP</div>
+ </div>
+
+ <button class="cg-btn start" onclick="startGame()">▶ 冒険を始める！</button>
+
+ 
+
+ <div style="height:16px"></div>
+</div>
+
+</div>
+
+<div id="story-screen" class="hidden">
+ <h2> 序章</h2>
+ <div id="story-text"></div>
+ <button id="story-action-btn" class="cg-btn start" onclick="handleStoryAction()">走り出す</button>
+</div>
+
+<div id="dice-test-screen" class="hidden">
+ <div id="dice-area">
+  <h3> 能力値テスト</h3>
+  <div id="dd"></div>
+  <div class="dr-result" id="dres">──  ──</div>
+  <button class="roll-btn" id="rl-btn" onclick="doRoll()">▶ ROLL THE DICE!</button>
+ </div>
+</div>
+
+<div id="dungeon-screen" class="hidden">
+<div id="hud" style="width:480px;max-width:94vw;display:flex;justify-content:space-between;font-size:12px;color:#c8b8a0;margin-bottom:6px"></div>
+<h2>ダンジョンビュー プロトタイプ</h2>
+<div class="note">straight（直進）の1枚だけ実画像を割り当てています。他のパターンは未用意のためプレースホルダー（色分けSVG）です。</div>
+
+<div id="viewArea"></div>
+<div id="debugInfo"></div>
+<div id="description"></div>
+<div id="choices"></div>
+
+<div id="minimap"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// 1) キャラクター作成ロジック（OOON流用）
+// ══════════════════════════════════════════════
+
+// ══════════════════════════════════════════════
+// OOON (tt5_engine.html) から抽出したキャラ作成ロジック
+// 出典行（元ファイル tt5_engine-3.html 内）：
+//   HTML構造   : #chargen 周辺
+//   ダイス関数  : d6, Nd6
+//   種族補正    : RACE_MODS, applyRace()
+//   種族体格    : RACE_SIZE_MODS, rollBodySize/rollHeight/rollWeight/updateSizeDisplay
+//   寿命        : AGING_PARAMS, rollLifespan()
+//   言語習得    : MONSTER_LANGUAGES, rollLanguages()
+//   NPC名候補   : NPC_NAMES, pickNPC()
+//   画面制御    : selectType, toggleStatEdit, rollStats, rollGold, updateAddsPreview,
+//                 updateRaceInfo
+// startGame() のみ、OOON世界観固有の要素（拠点・混沌・地方伝説・クエスト等）を
+// 全て取り除き、ダンジョンクローラー向けの汎用 buildCharacter() として書き直した。
+// ══════════════════════════════════════════════
+
+// ── ダイス ──
+const d6 = () => Math.floor(Math.random()*6)+1;
+const Nd6 = n => { let t=0; for(let i=0;i<n;i++) t+=d6(); return t; };
+
+// ── 種族補正 ──
+const RACE_MODS = {
+ human: { st:1, iq:1, lk:1, con:1, dex:1, chr:1, spd:1 },
+ elf: { st:1, iq:1.5, lk:1, con:0.667,dex:1.5, chr:1, spd:1 },
+ dwarf: { st:2, iq:1, lk:1, con:2, dex:1, chr:0.667, spd:1 },
+ halfling: { st:0.5, iq:1, lk:1, con:2, dex:1.5, chr:1, spd:1 },
+ fairy: { st:0.25,iq:1, lk:1.5, con:0.25, dex:1.5, chr:2, spd:1 },
+ leprechaun: { st:0.5, iq:1.5, lk:1.5, con:1, dex:1.5, chr:1, spd:1 },
+ troll:  { st:3,    iq:1, lk:1, con:3,    dex:1,   chr:1,    spd:1 },
+ ogre:   { st:2,    iq:1, lk:1, con:2,    dex:1,   chr:1,    spd:1 },
+ orc:    { st:1,    iq:1, lk:1, con:1,    dex:1,   chr:1,    spd:1 },
+ goblin: { st:0.75, iq:1, lk:1, con:0.75, dex:1.5, chr:0.75, spd:1 },
+};
+function applyRace(base, race){
+ const m = RACE_MODS[race];
+ const res = {};
+ Object.keys(m).forEach(k => res[k] = Math.round(base[k] * m[k]));
+ return res;
+}
+
+const RACE_INFO_TEXT = {
+ human: '人間: 全能力値 ×1（補正なし）',
+ elf: 'エルフ: 知力・器用さ ×3/2、体力 ×2/3',
+ dwarf: 'ドワーフ: 強さ・体力 ×2、魅力 ×2/3',
+ halfling: 'ハーフリング: 強さ ×1/2、体力 ×2、器用さ ×3/2',
+ fairy: 'フェアリー: 強さ・体力 ×1/4、運・器用さ ×3/2、魅力 ×2',
+ leprechaun: 'Leprechaun: ST ×1/2、IQ・LK・DEX ×3/2',
+ troll: '⚠ トロール: 強さ・体力 ×3。規格外の肉体を持つ上級者向けの種族。弱点による帳尻合わせはなく、ゲームバランスを大きく踏み越える。',
+ ogre: '⚠ オーガ: 強さ・体力 ×2。並外れた膂力を持つ、荒々しい種族。トロールに次ぐ強さの上級者向けの選択肢。',
+ orc: 'オーク: 全能力値 ×1（人間と同等の水準）。人間社会にも比較的馴染みやすい種族。',
+ goblin: 'ゴブリン: 強さ・体力 ×3/4、器用さ ×3/2、魅力 ×3/4。素早く小柄な種族。',
+};
+function updateRaceInfo(){
+ const r=document.getElementById('a-race').value;
+ document.getElementById('race-info').textContent=RACE_INFO_TEXT[r];
+}
+
+// ── 種族ごとの体格倍率 ──
+const RACE_SIZE_MODS = {
+ human:      { height:1,    weight:1 },
+ dwarf:      { height:2/3,  weight:7/8 },
+ elf:        { height:11/10,weight:1 },
+ halfling:   { height:1/2,  weight:1/2 },
+ fairy:      { height:1/10, weight:1/200 },
+ leprechaun: { height:1/3,  weight:1/4 },
+ troll:      { height:2,    weight:4 },
+ orc:        { height:1,    weight:1 },
+ ogre:       { height:3/2,  weight:2 },
+ goblin:     { height:3/4,  weight:3/4 },
+};
+function rollBodySize(race){
+ const mod = RACE_SIZE_MODS[race] || RACE_SIZE_MODS.human;
+ const hBase = 125 + Math.random()*(210-125);
+ const wBase = 35 + Math.random()*(170-35);
+ return {
+  height: Math.round(hBase*mod.height*10)/10,
+  weight: Math.round(wBase*mod.weight*100)/100,
+ };
+}
+function rollHeight(){
+ window._pcHeightBase = 125 + Math.random()*(210-125);
+ updateSizeDisplay();
+}
+function rollWeight(){
+ window._pcWeightBase = 35 + Math.random()*(170-35);
+ updateSizeDisplay();
+}
+function updateSizeDisplay(){
+ const race = document.getElementById('a-race').value;
+ const mod = RACE_SIZE_MODS[race] || RACE_SIZE_MODS.human;
+ const hEl = document.getElementById('a-height');
+ const wEl = document.getElementById('a-weight');
+ if(hEl) hEl.value = (window._pcHeightBase!=null) ? (Math.round(window._pcHeightBase*mod.height*10)/10) : '';
+ if(wEl) wEl.value = (window._pcWeightBase!=null) ? (Math.round(window._pcWeightBase*mod.weight*100)/100) : '';
+}
+
+// ── 寿命 ──
+const AGING_PARAMS = {
+ human: { lifespan:80, declineStart:40 },
+ elf: { lifespan:800, declineStart:200 },
+ dwarf: { lifespan:200, declineStart:80 },
+ halfling: { lifespan:100, declineStart:50 },
+ fairy: { lifespan:200, declineStart:100 },
+ leprechaun: { lifespan:300, declineStart:150 },
+ troll:  { lifespan:300, declineStart:200 },
+ ogre:   { lifespan:150, declineStart:100 },
+ orc:    { lifespan:60,  declineStart:35 },
+ goblin: { lifespan:40,  declineStart:25 },
+};
+function rollLifespan(race){
+ const base = (AGING_PARAMS[race] || AGING_PARAMS.human).lifespan;
+ const plus = Nd6(3);
+ const minus = Nd6(3);
+ return Math.max(base - 18, base + plus - minus);
+}
+
+// ── 言語習得（知力に応じてモンスター語を習得することがある） ──
+const MONSTER_LANGUAGES = ['トロール語', 'オーク語', 'ゴブリン語'];
+function rollLanguages(pc){
+ pc.languages = ['共通語'];
+ const chances = Math.max(0, (pc.iq||0) - 12);
+ for(let i=0; i<chances; i++){
+  if(Math.random() < 0.1){
+   const lang = MONSTER_LANGUAGES[Math.floor(Math.random()*MONSTER_LANGUAGES.length)];
+   if(!pc.languages.includes(lang)) pc.languages.push(lang);
+  }
+ }
+}
+
+// ── NPC名候補（ランダム名ボタン用） ──
+const NPC_NAMES = [
+ 'ガルム','ソーニャ','レイナ','ドルク','マリオン','ベック','ハンナ','トーレ',
+ 'エスター','ウルフ','セリア','バルド','ミラ','グンナル','リーラ','ヘルガ',
+ 'オスカル','ティナ','ブランド','エヴァ','ケルト','アルマ','ジョルン','カタリン',
+ 'ラグナル','フレイア','シグリッド','ビョルン','アスラウグ','エイリーク','グズルン',
+ 'ハーラル','インガ','ヨルン','クヴェルドウルフ','レイフ','マグニ','ニャル','オーラフ',
+ 'ラーン','スカルド','トールステイン','ウルリカ','ヴィガ','アルヴィド','ブリンヒル',
+ 'グリム','ダーグ','エリンド','フリーダ','ゴルム','イーズン','ヤールン','コルン',
+ 'ケティル','ヴィグディス','スヴェイン','ラーグンヒル','ゾルヴェイグ','エルリング','ホルム',
+ 'シグルズ','トルヴィ','ベルグヴェズル','アースムンド','ゲイルン','ヒルドゥル','ムンン',
+ 'フリョート','アトリ','ボルグヒルド','ゲスタ','ハールフダン','イーヴァル','ケルナ',
+ 'ランディ','スカルラグ','トルケル','ウンヌ','ヴェスト','アルフ','ブランタ','グドニ',
+ 'エルリン','シルヴァ','アエリン','ファリオン','タリア','ルーミル','ガラドリ',
+ 'フィンウェ','ネンヤ','カランフィン','エレンウェン','ヴィルヤ','アモン','ベレン',
+ 'ルシエン','フェアノル','マエグリン','イドリル','トゥオル','エアレンデル',
+ 'ガラン','ミルダ','セレン','アランウェ','ニムロデル','エルウィン','オロフィン',
+ 'カラドラス','エルモン','セレボルン','ガルドリエル','アルウェン','エレスサル','ペレグリン',
+ 'フィンロド','オロドレス','アングロド','アエグノル','フィナルフィン','インディス','ニエルナ',
+ 'ヴァイレ','エステ','ヴァナ','ヤヴァンナ','ニエンナ','ヴァルダ','ウルモ','マンウェ',
+ 'タングル','エルロンド','ケレボルン','グロルフィンデル','エレンディル','イシルドゥル','アナリオン',
+ 'カリム','ザイナブ','ハムザ','ファリダ','アブドゥル','ラシード','ヌール',
+ 'ヤシン','サミラ','タリク','ハニーン','ユスフ','レイラ','オマル','ナジーラ',
+ 'サリム','ハビバ','イブラヒム','マイムーナ','ザヒル','ラウダ','ファルフ',
+ 'バリカ','ダウード','アスマー','ハルン','ジャミーラ','カイス','ルバーバ',
+ 'アミーラ','バシール','ダーニア','ファーティマ','ガサン','ハディージャ','イマーン',
+ 'ジャリール','カマール','ラフィーク','マフムード','ナサーン','ルカイヤ','サファー',
+ 'タハーニ','ウルファット','ワリード','ヤスミン','ザカリヤ','アフマド','ビラール',
+ 'チャディ','ダリャ','エラム','フアード','ガドィール','ヒシャーム','イヤード',
+ 'ドルイン','ブロムン','グロイン','トーリン','ダーリン','ナーリ','オーリ',
+ 'ボフル','ボンブル','ドーリ','ノーリ','ビフル','バフル','フィーリ',
+ 'キーリ','バーリン','ドワリン','グロール','オイン','グローイン','イルダル',
+ 'ブルーニル','ゴルム','ナルヴィ','スロール','モドル','スランドゥイル','リン',
+ 'クラーリン','ドラーパ','エーム','フロスト','ガルム','ヒルド','イングヴァル',
+ 'ヤルル','ケルク','ルーン','マルン','ニフル','オルム','プログン','クラン',
+ 'ラーグ','スコール','トルン','ウルム','ヴォルム','アスク','ブルン','グルン',
+ 'ダルン','エルム','フルン','グドム','ハルン','イルム','ヤルン','カルン',
+ '蓮花','嵐','朱雀','玄武','白虎','青龍',
+ 'ライン','カイン','ミツキ','ソラ','リン','ハル',
+ 'アオ','クモ','タカ','ナギ','シン','フウ',
+ 'ユキ','カゲ','ツル','ウミ','キリ','カナ',
+ 'ジン','レン','シオン','トキ','ナツ','アキ',
+];
+function pickNPC(exclude=[]){
+ const pool = NPC_NAMES.filter(n=>!exclude.includes(n));
+ return pool[Math.floor(Math.random()*pool.length)];
+}
+
+// ── 画面制御 ──
+let selectedType = 'warrior';
+let startGold = 0;
+
+function goToChargen(){
+ document.getElementById('title-screen').classList.add('hidden');
+ document.getElementById('chargen-screen').classList.remove('hidden');
+}
+
+function selectType(t){
+ selectedType = t;
+ document.getElementById('card-warrior').classList.toggle('selected', t==='warrior');
+ document.getElementById('card-wizard').classList.toggle('selected', t==='wizard');
+ document.getElementById('card-rogue')?.classList.toggle('selected', t==='rogue');
+}
+
+function toggleStatEdit(){
+ const on = document.getElementById('stat-edit-toggle').checked;
+ window._manualStatEdit = on;
+ const ids = ['a-st','a-iq','a-lk','a-con','a-dex','a-chr','a-spd'];
+ ids.forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) on ? el.removeAttribute('readonly') : el.setAttribute('readonly','');
+ });
+ document.getElementById('stat-edit-label').textContent = on ? '手動入力：オン（種族補正後の値を直接入力）' : '手動入力：オフ';
+ document.getElementById('stat-edit-label').style.color = on ? '#e8e0d0' : 'var(--dim)';
+ document.getElementById('stat-edit-track').style.background = on ? '#4a3200' : '#2a1a0a';
+ document.getElementById('stat-edit-track').style.borderColor = on ? '#e8e0d0' : '#554422';
+ document.getElementById('stat-edit-thumb').style.left = on ? '22px' : '2px';
+ document.getElementById('stat-edit-thumb').style.background = on ? '#ffcc44' : '#665533';
+ const rlabel = document.getElementById('stat-after-race-label');
+ if(rlabel) rlabel.textContent = on ? '◆ 最終ステータス（手動入力のため種族補正は適用されません）' : '◆ 種族補正後ステータス';
+ updateAddsPreview();
+}
+
+function rollStats(){
+ ['a-st','a-iq','a-lk','a-con','a-dex','a-chr','a-spd'].forEach(id=>{
+ document.getElementById(id).value = Nd6(3);
+ });
+ updateAddsPreview();
+}
+
+function rollGold(){
+ startGold = Nd6(3)*10;
+ document.getElementById('gp-result').textContent = startGold;
+}
+
+function getBaseStats(){
+ return {
+ st:+document.getElementById('a-st').value||10,
+ iq:+document.getElementById('a-iq').value||10,
+ lk:+document.getElementById('a-lk').value||10,
+ con:+document.getElementById('a-con').value||10,
+ dex:+document.getElementById('a-dex').value||10,
+ chr:+document.getElementById('a-chr').value||10,
+ spd:+document.getElementById('a-spd').value||10,
+ };
+}
+
+function updateAddsPreview(){
+ const race = document.getElementById('a-race').value;
+ const base = getBaseStats();
+ const applied = window._manualStatEdit ? base : applyRace(base, race);
+ const st = applied.st, lk = applied.lk, dex = applied.dex;
+ let adds=0;
+ [st,lk,dex].forEach(v=>{if(v>12)adds+=v-12;else if(v<9)adds+=v-9;});
+ document.getElementById('prev-adds').textContent=(adds>=0?'+':'')+adds;
+ document.getElementById('prev-wt').textContent=st*100;
+
+ const preview = document.getElementById('stat-after-race');
+ if(preview){
+ const labels={st:'強さ',iq:'知力',lk:'運',con:'体力',dex:'器用さ',chr:'魅力',spd:'素早さ'};
+ preview.innerHTML = Object.keys(labels).map(k=>{
+ const before = base[k], after = applied[k];
+ const diff = after - before;
+ const color = diff>0?'var(--nature2)':diff<0?'var(--danger)':'var(--mid)';
+ const sign = diff>0?'+':'';
+ return `<div class="sp-cell">${labels[k]}<span style="color:${diff!==0?color:'var(--gold2)'}">${after}${diff!==0?`<span style="font-size:calc(var(--font-base) + 1px);color:${color}">${sign}${diff}</span>`:''}</span></div>`;
+ }).join('');
+ }
+}
+
+['a-st','a-iq','a-lk','a-con','a-dex','a-chr','a-spd'].forEach(id=>{
+ const el=document.getElementById(id);
+ if(el) el.addEventListener('input',updateAddsPreview);
+});
+
+// ══════════════════════════════════════════════
+// buildCharacter() : OOON本家の startGame() を汎用化したもの。
+// 拠点・混沌・地方伝説・クエスト等、OOON世界観固有の初期化は全て取り除き、
+// ダンジョンクローラーに必要な最小限のPCオブジェクトだけを返す。
+// ══════════════════════════════════════════════
+function buildCharacter(){
+ const base = getBaseStats();
+ const race = document.getElementById('a-race').value;
+ const applied = window._manualStatEdit ? base : applyRace(base, race);
+
+ // 魔法使いの能力値要件チェック（OOON本家と同じ条件）
+ const warn = document.getElementById('type-warn');
+ if(selectedType === 'wizard' && (applied.iq < 10 || applied.dex < 8)){
+  warn.classList.remove('hidden');
+  return null;
+ }
+ warn.classList.add('hidden');
+
+ if(window._pcHeightBase == null) window._pcHeightBase = 125 + Math.random()*(210-125);
+ if(window._pcWeightBase == null) window._pcWeightBase = 35 + Math.random()*(170-35);
+ const sizeMod = RACE_SIZE_MODS[race] || RACE_SIZE_MODS.human;
+
+ const pc = {
+  name: document.getElementById('a-name').value || 'Adventurer',
+  race,
+  type: selectedType,
+  height: Math.round(window._pcHeightBase * sizeMod.height * 10) / 10,
+  weight: Math.round(window._pcWeightBase * sizeMod.weight * 100) / 100,
+  ...applied,
+ };
+ pc.maxCon = pc.con;
+ pc.maxSt = pc.st;
+ pc.gold = startGold || Nd6(3)*10;
+ pc.ap = 0;
+ pc.level = 1;
+
+ // ダンジョンクローラー向けの汎用インベントリ枠（中身はOOONの装備システムに準拠しなくてよい）
+ pc.inventory = [];
+ pc.equipped = { weapon: null, armor: null };
+
+ pc.age = 15 + Math.floor(Math.random() * 16); // 15〜30歳
+ pc.lifespan = rollLifespan(race);
+ rollLanguages(pc);
+
+ return pc;
+}
+
+let _pendingPC = null;
+
+const STORY_INTRO_TEXT = `暗く湿った石造りの階段を、鉄鎖の擦れる音とともに下らされていく。
+かつて数々の冒険者を飲み込み、今や一度入れば二度と生きては出られない悪名高き流刑地。君は不当な容疑で逮捕され、弁明や裁判の機会すら与えられないまま、この地へと連行されてきた。
+身にまとっていた甲冑も、使い慣れた武器も、懐の小銭に至るまで全て奪われている。今あるのは、ボロきれのような服だけだ。
+眼前には、古びた巨大な鉄の重門が重々しい音を立てて開いている。
+背後に視線を遣ると、威圧的な黒革の鎧を身にまとい、大型の戦弓に矢を番えた5人の衛兵が、いつでも君の心臓を射抜ける構えで距離を詰めていた。逃げ場など、どこにもない。
+「とっとと行け！」
+背後から強い衝撃が走り、衛兵の靴底が君の背中を思い切り蹴飛ばす。
+「走れ！ 犬ころが！」
+体勢を崩しながら、君は冷たい石畳のダンジョン内部へと転がり込んだ。君が走り出すと衛兵たちは笑いながら君の背中に向けて矢を放つ。`;
+
+function startGame(){
+ const pc = buildCharacter();
+ if(!pc) return; // 職業要件を満たさず中断
+ _pendingPC = pc;
+ showStory();
+}
+
+function showStory(){
+ document.getElementById('chargen-screen').classList.add('hidden');
+ document.getElementById('story-screen').classList.remove('hidden');
+ document.getElementById('story-text').textContent = STORY_INTRO_TEXT;
+}
+
+// 汎用セービングロール（ルールブック準拠）：
+// 目標値 = レベル×5+15、判定 = 爆発2D6 + 対象能力値、出目（爆発前）が5未満なら自動失敗。
+// 獲得APは出目×レベル（成功・失敗を問わず）。
+function savingRoll(statValue, level, roll){
+ roll = roll || explodingDoubles2D6();
+ const target = level * 5 + 15;
+ if (roll.firstTotal < 5){
+  return { success:false, roll, target, autoFail:true };
+ }
+ const success = (roll.total + statValue) >= target;
+ return { success, roll, target, autoFail:false };
+}
+
+const ATTR_LABEL_JP = { st:'強さ', iq:'知力', lk:'運', con:'体力', dex:'器用さ', chr:'魅力', spd:'素早さ' };
+
+// 矢を掻い潜ってダンジョンへ逃げ込めるかの素早さ判定。専用の「能力値テスト」画面（OOON本家の#dice-areaと同一構成）へ遷移する。
+let _diceTestPending = null; // {attr, onDone}
+
+function handleStoryAction(){
+ document.getElementById('story-screen').classList.add('hidden');
+ startDiceTest(_pendingPC, 'spd', onDodgeCheckResolved);
+}
+
+// 能力値テスト画面をセットアップして表示する（OOON本家 setupSavingRoll() 相当）。
+// actor: 判定を行うキャラ（キャラ作成直後は_pendingPC、ダンジョン探索中はplayer）。
+// 呼び出し側が事前に自分の画面を隠しておく（このダイス画面自体の表示/非表示のみここで管理する）。
+function startDiceTest(actor, attr, onDone){
+ _diceTestPending = { actor, attr, onDone };
+ const target = actor.level * 5 + 15;
+ const attrVal = actor[attr];
+ const attrLabel = ATTR_LABEL_JP[attr] || attr;
+
+ document.getElementById('dice-test-screen').classList.remove('hidden');
+ document.getElementById('dd').innerHTML =
+  `<span style="color:var(--white)">Lv${actor.level} ${attrLabel}(${attrVal})</span><br>目標: 2D6+${attrVal} ≥ <span style="color:var(--white)">${target}</span>`;
+ const dres = document.getElementById('dres');
+ dres.textContent = '──  ──';
+ const btn = document.getElementById('rl-btn');
+ btn.disabled = false;
+ btn.textContent = '▶ ROLL THE DICE!';
+ btn.onclick = doRoll;
+}
+
+// サイコロを振る（OOON本家 doRoll() と同一。押した瞬間に爆発2D6ロールが確定・表示される）。
+function doRoll(){
+ const pending = _diceTestPending;
+ if (!pending) return;
+ const attrVal = pending.actor[pending.attr];
+ const result = savingRoll(attrVal, pending.actor.level);
+ _resolveDiceTest(result);
+}
+
+function _resolveDiceTest(result){
+ const pending = _diceTestPending;
+ const actor = pending.actor;
+ const attrVal = actor[pending.attr];
+ const roll = result.roll;
+
+ // 経験点はルール通り出目×レベル（成否問わず加算）
+ const apGain = roll.total * actor.level;
+ actor.ap = (actor.ap || 0) + apGain;
+ actor.level = levelFromAP(actor.ap);
+
+ let doublesStr = '';
+ for (let i = 2; i < roll.dice.length; i += 2) doublesStr += ' +';
+
+ const dres = document.getElementById('dres');
+ if (result.autoFail){
+  dres.innerHTML = `${diceStr(roll.dice)}=<span style="color:#f0ece0">${roll.firstTotal}</span>　<span style="color:var(--white)">自動失敗</span>（出目5未満）　経験値+${apGain}`;
+ } else {
+  dres.innerHTML = `${diceStr(roll.dice)}=<span style="color:#f0ece0">${roll.total}</span>${doublesStr}　合計: ${roll.total}+${attrVal}=<span style="color:#f0ece0">${roll.total + attrVal}</span>（目標${result.target}）　${result.success ? '<span style="color:var(--white)">成功</span>' : '<span style="color:var(--white)">失敗</span>'}　経験値+${apGain}`;
+ }
+
+ const btn = document.getElementById('rl-btn');
+ btn.disabled = false;
+ btn.textContent = '▶ DONE';
+ btn.onclick = () => {
+  document.getElementById('dice-test-screen').classList.add('hidden');
+  _diceTestPending = null;
+  pending.onDone(result);
+ };
+}
+
+// 素早さ判定の結果を受けて、序章の続き（矢を躱せたか／被弾したか）を処理する。
+function onDodgeCheckResolved(result){
+ const pc = _pendingPC;
+ document.getElementById('story-screen').classList.remove('hidden');
+
+ if (result.success){
+  document.getElementById('story-text').textContent =
+   STORY_INTRO_TEXT + `\n\n矢は君の頬をかすめて石壁に突き刺さった。振り返る余裕もなく、君はダンジョンの闇の中へと駆け込んでいく……`;
+  const btn = document.getElementById('story-action-btn');
+  btn.textContent = '▶ ダンジョンへ';
+  btn.onclick = proceedToDungeon;
+  return;
+ }
+
+ // 失敗：矢が命中。ダメージは6〜36（6D6）。
+ const dmg = Nd6(6);
+ pc.con -= dmg;
+ if (pc.con <= 0){
+  pc.con = 0;
+  document.getElementById('story-text').textContent =
+   STORY_INTRO_TEXT + `\n\n鋭い痛みが背中に走った。矢が深々と突き刺さり（${dmg}ダメージ）、君は冷たい石畳の上に倒れ込む……視界が闇に溶けていく。`;
+  const btn = document.getElementById('story-action-btn');
+  btn.textContent = '最初からやり直す';
+  btn.onclick = () => location.reload();
+  return;
+ }
+
+ document.getElementById('story-text').textContent =
+  STORY_INTRO_TEXT + `\n\n矢の一本が肩に突き刺さり、鋭い痛みが走る（${dmg}ダメージ、残りHP ${pc.con}/${pc.maxCon}）。それでも君は歯を食いしばり、なおもダンジョンの奥へと走り込む……`;
+ const btn = document.getElementById('story-action-btn');
+ btn.textContent = '▶ ダンジョンへ';
+ btn.onclick = proceedToDungeon;
+}
+
+function proceedToDungeon(){
+ document.getElementById('story-screen').classList.add('hidden');
+ enterDungeon(_pendingPC);
+ _pendingPC = null;
+}
+
+// ══════════════════════════════════════════════
+// キャラ作成 → ダンジョン画面 の接続
+// ══════════════════════════════════════════════
+const RACE_LABEL_JP = {
+ human:'人間', elf:'エルフ', dwarf:'ドワーフ', halfling:'ハーフリング',
+ fairy:'フェアリー', leprechaun:'レプラコーン', troll:'トロール',
+ ogre:'オーガ', orc:'オーク', goblin:'ゴブリン',
+};
+const TYPE_LABEL_JP = { warrior:'戦士', wizard:'魔法使い', rogue:'盗賊' };
+
+function enterDungeon(pc){
+ // buildCharacter() が返すPCオブジェクト（能力値・種族・職業・体格・所持金など）に
+ // ダンジョン探索用の座標・向きを足して player を初期化する。
+ // player.spd はそのままキャラの素早さ（逃走判定で使用）になる。
+ player = {
+  x: 3, y: 7, facing: 0, // 「1. 能力値テスト後に遷移する場所（北向き）」
+  ...pc,
+ };
+
+ document.getElementById('chargen-screen').classList.add('hidden');
+ document.getElementById('dungeon-screen').classList.remove('hidden');
+
+ render();
+}
+
+function renderHUD(){
+ const hud = document.getElementById('hud');
+ if(!hud || !player) return;
+ const raceLabel = RACE_LABEL_JP[player.race] || player.race;
+ const typeLabel = TYPE_LABEL_JP[player.type] || player.type;
+ hud.textContent = `${player.name}（${raceLabel}・${typeLabel}） Lv${player.level}　HP ${player.con}/${player.maxCon}　GP ${player.gold}`;
+}
+
+// 初期表示
+updateRaceInfo();
+updateAddsPreview();
+
+
+// ══════════════════════════════════════════════
+// 2) ダンジョンビューロジック
+// ══════════════════════════════════════════════
+
+// ============================================================
+// ダンジョンデータ
+// ============================================================
+// 複数フロアを持てるように、フロアごとのデータを DUNGEON_FLOORS にまとめ、
+// 現在のフロアのデータへの参照を dungeonData (再代入可能) が指す形にする。
+const DUNGEON_FLOORS = {
+  1: {
+    floor: 1,
+    width: 7,
+    height: 12,
+    // 添付マップ(map-5.txt)をそのまま反映。数字・記号（イベント位置）は床(' ')として展開し、
+    // 実際のイベントは roomCells / trapCells / tileFlavor で別管理する。
+    // y=0が最北、yが増えるほど南（行番号-1がそのままy座標）。
+    tiles: [
+      "#######", // y=0
+      "#     #", // y=1  (元「3」＝落とし穴。trapCellsで管理)
+      "# # # #", // y=2
+      "# # # #", // y=3  (元「>」＝階段。roomCellsで管理)
+      "# ### #", // y=4
+      "#     #", // y=5
+      "### ###", // y=6
+      "  # #",   // y=7  (元「1」＝能力値テスト後の開始地点)
+      "  # #",   // y=8
+      "  # #",   // y=9
+      "  # #",   // y=10 (元「2」＝門への接近描写)
+      "  # #"    // y=11 (元「+」＝門そのもの)
+    ],
+    // 座標キー "x,y" -> roomId（画像＋テキスト描写＋選択肢を持つ「部屋」ノード）
+    roomCells: {
+      "3,3": "room_stairs_down"
+    },
+    // 落とし穴などの「罠」タイル。roomCellsとは別に、通路移動時にトリガーする。
+    // 一度発動・回避したら _resolved=true にして再発しないようにする。
+    trapCells: {
+      "3,1": { id: "pit_trap_1", type: "pit" }
+    },
+    // 通路上の特定タイルに立った時だけ表示するフレーバーテキスト（部屋ノードにはしない簡易描写）。
+    tileFlavor: {
+      "3,10": "ダンジョンの入口。古びた巨大な鉄門は固く閉じられている。",
+      "3,11": "ダンジョンの入口、古びた巨大な鉄の重門。ここが、君が転がり込んできた場所だ。今は固く閉ざされている。"
+    }
+  },
+  2: {
+    floor: 2,
+    width: 17,
+    height: 11,
+    // 添付マップ(map-6.txt)をそのまま反映。x=0が最西、y=0が最北。
+    // 「<」＝フロア1へ戻る上り階段（roomCellsで管理）。
+    // 「1」＝西壁のレバー（本来「東壁」に訂正済み。interactCellsで管理）。
+    // 「2」＝西壁の落とし格子（gateCellsで管理。レバーを引くまで通行不可）。
+    tiles: [
+      "  ###", // y=0
+      "  # # ###", // y=1
+      "  # # # # ######", // y=2  (元「<」＝上り階段。roomCellsで管理)
+      "  # # # # #    #", // y=3
+      "### ### ### ## #", // y=4
+      "#           ## #", // y=5
+      "### ####### ## #", // y=6
+      "  # #     # ## #", // y=7
+      "### #     # ## ##", // y=8
+      "#   #     #     #", // y=9 (元「2」＝落とし格子/西壁, 元「1」＝レバー/東壁)
+      "#####     #######"  // y=10
+    ],
+    roomCells: {
+      "7,2": "room_stairs_up"
+    },
+    trapCells: {},
+    tileFlavor: {},
+    // 落とし格子（ゲート）。閉じている間は壁と同じ扱い（isFloorがfalseを返す）。
+    // レバーを引くとopenがtrueになり、その瞬間から通行可能になる。
+    gateCells: {
+      "0,9": { id: "gate_1", open: false }
+    },
+    // レバーなど、通路上に立つと操作できる設備。roomの選択肢とは別枠の軽量な仕組み。
+    interactCells: {
+      "15,9": { id: "lever_1", label: "東の壁のレバーを引く", action: "pull_lever_1" }
+    },
+    // (1,9)の落とし格子は開閉状態でテキストが変わるため、静的なtileFlavorではなく関数で持つ。
+    dynamicFlavor(x, y) {
+      if (x === 1 && y === 9) {
+        const gate = this.gateCells['0,9'];
+        return gate.open
+          ? '西の壁の落とし格子は開かれている。道はさらに西へ続いているが、その先はまだ地図にない。'
+          : '西の壁に古い落とし格子が下ろされている。通路を完全に塞いでいる。';
+      }
+      return null;
+    }
+  }
+};
+
+let dungeonData = DUNGEON_FLOORS[1];
+
+// 部屋定義（画像＋テキスト描写＋選択肢型 / OOONのノードイベントに近い形）
+// room_altar・room_ambushは既存の画像資産（会話内でユーザーから提供済み）だが、
+// 今回のマップ(map-3.txt)には配置場所の指定がなかったため、いずれの座標にも接続していない
+// （roomCellsに未登録＝現状は到達不能）。将来別の座標に配置する想定で定義は残している。
+const rooms = {
+  room_stairs_up: {
+    image: "room_stairs_up.png", // TODO: 実画像に差し替え
+    description: "ここは下の階から上ってきた階段の踊り場だ。石段が上へ続いている。",
+    eventType: "stairs",
+    extraChoices: [
+      { label: "階段を上る", action: "event_stairs_up" }
+    ]
+  },
+  room_stairs_down: {
+    image: "room_stairs_down.png", // TODO: 実画像に差し替え
+    description: "北の壁際に、下へと続く狭い階段が見える。冷たい風が吹き上げてくる。",
+    eventType: "stairs",
+    extraChoices: [
+      { label: "階段を降りる", action: "event_stairs_down" }
+    ]
+  },
+  room_altar: {
+    image: "room_altar.png", // TODO: 実画像に差し替え
+    description: "古い祭壇が中央に据えられている。表面には読み取れない文字が刻まれ、微かに冷気を感じる。",
+    eventType: "investigate",
+    extraChoices: [
+      { label: "祭壇を調べる", action: "event_altar_inspect" }
+    ]
+  },
+  room_ambush: {
+    image: "room_ambush.png", // TODO: 実画像に差し替え
+    description: "物陰から複数の気配がする……襲撃だ！",
+    eventType: "combat",
+    combatId: "ambush_goblins",
+    // 例外設定: 見た目は開いていても塞がっている出口
+    exitsOverride: { west: false }
+  }
+};
+
+// 廊下ビューのパターン別バリエーション（画像ファイル名。images/ 配下に置く）
+const viewPatterns = {
+  straight:       ["straight_01.png","straight_02.png","straight_03.png","straight_04.png","straight_05.png"],
+  dead_end:       ["dead_end_01.png","dead_end_02","dead_end_03","dead_end_04","dead_end_05"],
+  corner_left:    ["corner_left_01.png","corner_left_02","corner_left_03","corner_left_04","corner_left_05"],
+  corner_right:   ["corner_right_01.png","corner_right_02","corner_right_03","corner_right_04","corner_right_05"],
+  fork_left:      ["fork_left_01.png","fork_left_02","fork_left_03","fork_left_04","fork_left_05"],
+  fork_right:     ["fork_right_01.png","fork_right_02","fork_right_03","fork_right_04","fork_right_05"],
+  t_junction:     ["t_junction_01.png","t_junction_02","t_junction_03","t_junction_04","t_junction_05"],
+  cross_junction: ["cross_junction_01.png","cross_junction_02","cross_junction_03","cross_junction_04","cross_junction_05"]
+};
+
+// 実画像が用意済みのファイル名一覧（ここに載っていれば images/ から <img> 表示、
+// 載っていなければプレースホルダーSVGにフォールバックする）
+// 画像は images/ フォルダから読み込む（base64埋め込みは廃止）。
+// このSetは「実画像が用意済みのファイル名」の一覧で、pickVariant()の選択プールに使う。
+// 存在しないファイルを指定した場合は<img>のonerrorでプレースホルダーに自動フォールバックする。
+const AVAILABLE_IMAGE_FILES = new Set([
+  "straight_01.png",
+  "corner_left_01.png",
+  "t_junction_01.png",
+  "corner_right_01.png",
+  "fork_right_01.png",
+  "fork_left_01.png",
+  "cross_junction_01.png",
+  "dead_end_01.png",
+  "room_ambush.png",
+  "room_altar.png"
+]);
+
+// 画像があれば<img>、なければプレースホルダーdivを表示するHTMLを組み立てる共通ヘルパー。
+// 実際に読み込みに失敗した場合（ファイル欠落など）もonerrorでプレースホルダーに切り替わる。
+function imageOrPlaceholder(filename, label, extraStyle) {
+  const style = `width:480px;height:320px;object-fit:cover;display:block;${extraStyle || ''}`;
+  const placeholder = `[${label}: ${filename} 未検出]`;
+  return `<img src="images/${filename}" alt="${filename}" style="${style}" onerror="this.outerHTML='<div style=&quot;width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;&quot;>${placeholder}</div>'" />`;
+}
+
+// ============================================================
+// プレイヤー / 状態
+// ============================================================
+// facing: 0=北 1=東 2=南 3=西
+let player = null; // キャラ作成完了後、enterDungeon()で生成されたPCから初期化される
+let combatState = null;
+
+// 「振り返る」で見た目の整合性を保つための状態。
+// 直前に表示していた廊下画像を記憶しておき、振り返り時はハッシュで新規選択せず、
+// 同じ画像を左右反転して表示する（バリエーション不足による唐突な絵の切り替わりを避けるため）。
+let lastCorridorVariant = null;
+let imageFlipped = false;
+
+const DIRS = [
+  { name:"north", label:"北", dx:0, dy:-1 },
+  { name:"east",  label:"東", dx:1, dy:0 },
+  { name:"south", label:"南", dx:0, dy:1 },
+  { name:"west",  label:"西", dx:-1, dy:0 }
+];
+
+// ============================================================
+// タイル判定
+// ============================================================
+function isFloor(x, y) {
+  if (y < 0 || y >= dungeonData.height) return false;
+  const gate = dungeonData.gateCells && dungeonData.gateCells[`${x},${y}`];
+  if (gate && gate.open) return true;
+  const row = dungeonData.tiles[y];
+  if (x < 0 || x >= row.length) return false;
+  return row[x] === ' ';
+}
+
+function roomIdAt(x, y) {
+  return dungeonData.roomCells[`${x},${y}`] || null;
+}
+
+// ============================================================
+// 視界パターン判定（正面・左・右の開放/壁の組み合わせ → 8パターン）
+// ============================================================
+function getViewType(x, y, facing) {
+  const front = DIRS[facing];
+  const left = DIRS[(facing + 3) % 4];
+  const right = DIRS[(facing + 1) % 4];
+
+  const fOpen = isFloor(x + front.dx, y + front.dy);
+  const lOpen = isFloor(x + left.dx, y + left.dy);
+  const rOpen = isFloor(x + right.dx, y + right.dy);
+
+  const key = `${fOpen},${lOpen},${rOpen}`;
+  const table = {
+    "true,false,false": "straight",
+    "false,false,false": "dead_end",
+    "false,true,false": "corner_left",
+    "false,false,true": "corner_right",
+    "true,true,false": "fork_left",
+    "true,false,true": "fork_right",
+    "false,true,true": "t_junction",
+    "true,true,true": "cross_junction"
+  };
+  return table[key];
+}
+
+// ============================================================
+// 座標シードハッシュ（同じ座標・向き・パターンなら常に同じ結果）
+// ============================================================
+function hashCoord(floor, x, y, facing, viewType) {
+  let seed = 0;
+  for (let i = 0; i < viewType.length; i++) seed += viewType.charCodeAt(i);
+  let h = (floor * 73856093) ^ (x * 19349663) ^ (y * 83492791) ^ (facing * 2654435761) ^ seed;
+  h = h ^ (h >>> 13);
+  h = Math.imul(h, 0x5bd1e995);
+  h = h ^ (h >>> 15);
+  return Math.abs(h);
+}
+
+function pickVariant(floor, x, y, facing, viewType) {
+  const list = viewPatterns[viewType];
+  // 実画像が用意済みの番号だけを選択対象にする（未用意の番号はプレースホルダーに
+  // 逃げてしまうため、用意されている番号がある限りはそこから選ぶ）。
+  // バリエーションを追加していけば、対象プールが自動的に広がる。
+  const availableIndices = list
+    .map((img, i) => i)
+    .filter(i => AVAILABLE_IMAGE_FILES.has(list[i]));
+  const pool = availableIndices.length > 0 ? availableIndices : list.map((_, i) => i);
+  const h = hashCoord(floor, x, y, facing, viewType);
+  const index = pool[h % pool.length];
+  return { image: list[index], index };
+}
+
+// ============================================================
+// 廊下ビュー描画
+// 実画像(images/<file>)が用意されていればそれを表示、
+// なければプレースホルダーSVGにフォールバックする
+// ============================================================
+function renderCorridorView(variant, flipped) {
+  const flipStyle = flipped ? 'transform:scaleX(-1);' : '';
+
+  if (AVAILABLE_IMAGE_FILES.has(variant.image)) {
+    return imageOrPlaceholder(variant.image, '仮イラスト', flipStyle);
+  }
+
+  const front = DIRS[player.facing];
+  const left = DIRS[(player.facing + 3) % 4];
+  const right = DIRS[(player.facing + 1) % 4];
+  const lOpen = isFloor(player.x + left.dx, player.y + left.dy);
+  const rOpen = isFloor(player.x + right.dx, player.y + right.dy);
+
+  // バリエーションごとに色相を変えて「別カット」を演出（未用意パターンの仮表示）
+  const hue = (variant.index * 47) % 360;
+
+  let svg = `<svg viewBox="0 0 480 320" width="480" height="320" style="${flipStyle}">`;
+  svg += `<rect width="480" height="320" fill="hsl(${hue},20%,10%)" />`;
+  svg += `<polygon points="140,80 340,80 300,160 180,160" fill="hsl(${hue},25%,25%)" stroke="#000" />`;
+  svg += lOpen
+    ? `<polygon points="0,0 140,80 180,160 0,280" fill="hsl(${hue},20%,15%)" stroke="#000" />`
+    : `<polygon points="0,0 140,80 140,240 0,320" fill="hsl(${hue},25%,30%)" stroke="#000" />`;
+  svg += rOpen
+    ? `<polygon points="480,0 340,80 300,160 480,280" fill="hsl(${hue},20%,15%)" stroke="#000" />`
+    : `<polygon points="480,0 340,80 340,240 480,320" fill="hsl(${hue},25%,30%)" stroke="#000" />`;
+  svg += `<text x="10" y="310" fill="#888" font-size="11" font-family="sans-serif">[仮イラスト：${variant.image} 未用意]</text>`;
+  svg += `</svg>`;
+  return svg;
+}
+
+// ============================================================
+// ダイス／判定ロジック（OOON準拠：ダブルス爆発2D6）
+// ============================================================
+// d6() はキャラ作成側（const d6 = ...）のものをそのまま流用する
+
+function explodingDoubles2D6() {
+  let a = d6(), b = d6();
+  const firstTotal = a + b;
+  let total = firstTotal;
+  const dice = [a, b];
+  while (a === b) {
+    a = d6(); b = d6();
+    dice.push(a, b);
+    total += a + b;
+  }
+  return { total, firstTotal, dice };
+}
+const diceStr = dice => `[${dice.join(',')}]`;
+
+// ============================================================
+// 戦闘システム（ooon_ruleset_export.json 準拠）
+// ============================================================
+
+// ── モンスター定義（MR = Monster Rating。戦闘力とHPを兼ねる単一値） ──
+const MONSTER_DEFS = {
+  ambush_goblins: { name: 'ゴブリンの群れ', mr: 15 },
+};
+
+// ── 経験値・レベル ──
+// apThresholds[i] = レベル(i+1)に到達するために必要な累積AP
+const AP_THRESHOLDS = [0,1000,3000,7000,15000,25000,45000,70000,100000,140000,200000,280000,400000,550000,750000,1000000,2000000,4000000,8000000,16000000];
+function levelFromAP(ap){
+  let level = 1;
+  for (let i=0; i<AP_THRESHOLDS.length; i++){
+    if (ap >= AP_THRESHOLDS[i]) level = i+1; else break;
+  }
+  return level;
+}
+
+// ── 戦闘加算値（adds）：ST/LK/DEXそれぞれ12超で+、9未満で- ──
+function statAdd(v){
+  if (v > 12) return v - 12;
+  if (v < 9) return v - 9;
+  return 0;
+}
+function calcAdds(pc){
+  return statAdd(pc.st) + statAdd(pc.lk) + statAdd(pc.dex);
+}
+
+// ── 防具点：戦士は2倍（現状は装備システム未実装のため常に0） ──
+function getArmorValue(pc){
+  const base = (pc.equipped && pc.equipped.armor && pc.equipped.armor.hits) || 0;
+  return pc.type === 'warrior' ? base * 2 : base;
+}
+
+// ── モンスター側ロール：MRからダイス数・固定ボーナスを算出 ──
+function monsterRoll(mr){
+  const diceCount = Math.floor(mr/10) + 1;
+  const flatBonus = Math.ceil(mr/2);
+  const dice = Nd6(diceCount);
+  return { total: dice + flatBonus, diceCount, flatBonus };
+}
+
+// ── プレイヤー側ロール：現状は素手（武器システム未実装）なのでd6+adds ──
+function playerCombatRoll(pc){
+  const adds = calcAdds(pc);
+  const die = d6();
+  return { total: die + adds, die, adds };
+}
+
+// 逃走判定: レベル固定(Lv1)のsavingRoll。target = 1*5+15 = 20
+function attemptFlee(spd) {
+  const roll = explodingDoubles2D6();
+  if (roll.firstTotal < 5) {
+    return { success: false, roll, reason: "自動失敗（初期出目5未満）" };
+  }
+  const success = (roll.total + spd) >= 20;
+  return { success, roll, reason: success ? "成功" : "失敗" };
+}
+
+// ============================================================
+// 画面描画
+// ============================================================
+// ダンジョン内での罠発動によるゲームオーバー（戦闘死亡とは別枠のメッセージ）
+let _dungeonGameOverMessage = null;
+// 罠や特殊タイルの結果を、次のrender()で一度だけ描写に出すためのメッセージバッファ
+let _dungeonMessage = null;
+
+// 座標移動の共通入口。移動後にtrapCellsを確認し、未解決の罠があれば通常のrender()の前に
+// 罠のシーケンス（能力値テスト画面へ遷移）を割り込ませる。
+function moveTo(x, y, facing){
+  player.x = x;
+  player.y = y;
+  if (facing !== undefined) player.facing = facing;
+
+  const trap = dungeonData.trapCells[`${x},${y}`];
+  if (trap && !trap._resolved && trap.type === 'pit') {
+    triggerPitTrap(trap);
+    return;
+  }
+  render();
+}
+
+// 落とし穴：運Lv1判定で気づく→気づけば回避。気づかなければ落とし穴が作動し、
+// 器用さLv1判定に成功すれば間一髪回避、失敗すると1-6ダメージで転落する。
+function triggerPitTrap(trap){
+  document.getElementById('dungeon-screen').classList.add('hidden');
+  startDiceTest(player, 'lk', (noticeResult) => {
+    if (noticeResult.success){
+      trap._resolved = true;
+      document.getElementById('dungeon-screen').classList.remove('hidden');
+      _dungeonMessage = '床の一部に不自然な継ぎ目があるのに気づいた。慎重に踏み外さないよう避けて進む。';
+      render();
+      return;
+    }
+    // 気づかず踏んでしまう → 落とし穴が作動
+    startDiceTest(player, 'dex', (dodgeResult) => {
+      trap._resolved = true;
+      if (dodgeResult.success){
+        document.getElementById('dungeon-screen').classList.remove('hidden');
+        _dungeonMessage = '突然、足元の床が抜けた！ ―― だが間一髪、身を翻して落とし穴を回避した。';
+        render();
+        return;
+      }
+      const dmg = d6();
+      player.con -= dmg;
+      document.getElementById('dungeon-screen').classList.remove('hidden');
+      if (player.con <= 0){
+        player.con = 0;
+        _dungeonGameOverMessage = `突然、足元の床が抜けた！ 為す術もなく深い縦穴の底へ落下し（${dmg}ダメージ）、そのまま帰らぬ人となった……`;
+        render();
+        return;
+      }
+      _dungeonMessage = `突然、足元の床が抜けた！ 落とし穴に転落し、${dmg}ダメージを受けた（残りHP ${player.con}/${player.maxCon}）。`;
+      render();
+    });
+  });
+}
+
+// フロア間の移動（階段など）。dungeonDataの参照を切り替えて指定座標へ配置する。
+function enterFloor(floorNum, x, y, facing){
+  dungeonData = DUNGEON_FLOORS[floorNum];
+  player.x = x;
+  player.y = y;
+  player.facing = facing;
+  imageFlipped = false;
+  lastCorridorVariant = null;
+  render();
+}
+
+function render() {
+  renderHUD();
+  const viewArea = document.getElementById('viewArea');
+  const debugInfo = document.getElementById('debugInfo');
+  const description = document.getElementById('description');
+  const choices = document.getElementById('choices');
+  choices.innerHTML = '';
+
+  // 罠などによるダンジョン内ゲームオーバー（戦闘死亡とは別経路）
+  if (_dungeonGameOverMessage) {
+    viewArea.innerHTML = `<div style="width:480px;height:320px;background:#500;display:flex;align-items:center;justify-content:center;color:#fdd;">── ゲームオーバー ──</div>`;
+    debugInfo.textContent = '';
+    description.textContent = _dungeonGameOverMessage;
+    const restartBtn = document.createElement('button');
+    restartBtn.textContent = '最初からやり直す';
+    restartBtn.onclick = () => location.reload();
+    choices.appendChild(restartBtn);
+    renderMinimap();
+    return;
+  }
+
+  if (combatState) {
+    renderCombat();
+    renderMinimap();
+    return;
+  }
+
+  const currentRoomId = roomIdAt(player.x, player.y);
+
+  if (currentRoomId) {
+    const room = rooms[currentRoomId];
+    viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(room.image)
+      ? imageOrPlaceholder(room.image, '部屋画像')
+      : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.image} 未用意]</div>`;
+    debugInfo.textContent = `部屋: ${currentRoomId} / eventType: ${room.eventType}${room._resolved ? "（解決済み）" : ""}`;
+    description.textContent = room.description;
+
+    // 戦闘イベント（未解決）なら戦闘へ突入、出口は隠す
+    if (room.eventType === "combat" && !room._resolved) {
+      startCombat(room.combatId, currentRoomId);
+      return;
+    }
+
+    // 部屋固有の追加選択肢
+    (room.extraChoices || []).forEach(choice => {
+      const btn = document.createElement('button');
+      btn.textContent = choice.label;
+      btn.onclick = () => handleAction(choice.action);
+      choices.appendChild(btn);
+    });
+
+    // 出口の自動生成（exitsOverride があれば優先、なければ隣接タイル判定）
+    DIRS.forEach((dir, dirIndex) => {
+      const override = room.exitsOverride ? room.exitsOverride[dir.name] : undefined;
+      const open = override !== undefined ? override : isFloor(player.x + dir.dx, player.y + dir.dy);
+      if (open) {
+        const btn = document.createElement('button');
+        btn.textContent = `${dir.label}の出口へ`;
+        btn.onclick = () => {
+          imageFlipped = false;
+          moveTo(player.x + dir.dx, player.y + dir.dy, dirIndex);
+        };
+        choices.appendChild(btn);
+      }
+    });
+
+  } else {
+    const viewType = getViewType(player.x, player.y, player.facing);
+
+    // 振り返り直後だけは新規にハッシュ選択せず、直前の画像を反転して使い回す
+    // （見た目の整合性のため。前進／左右を向く操作をすると通常選択に戻る）
+    let variant;
+    if (imageFlipped && lastCorridorVariant) {
+      variant = lastCorridorVariant;
+    } else {
+      variant = pickVariant(dungeonData.floor, player.x, player.y, player.facing, viewType);
+      lastCorridorVariant = variant;
+    }
+
+    viewArea.innerHTML = renderCorridorView(variant, imageFlipped);
+    debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label} viewType:${viewType} 使用画像:${variant.image}${imageFlipped ? '（反転表示）' : ''}`;
+
+    // 罠の結果メッセージ（1回限り）→ なければ動的フレーバー → なければタイル固有のフレーバーテキスト → なければ空
+    const posKey = `${player.x},${player.y}`;
+    if (_dungeonMessage) {
+      description.textContent = _dungeonMessage;
+      _dungeonMessage = null;
+    } else {
+      const dynText = dungeonData.dynamicFlavor ? dungeonData.dynamicFlavor(player.x, player.y) : null;
+      description.textContent = dynText != null ? dynText : (dungeonData.tileFlavor[posKey] || '');
+    }
+
+    // レバーなどの設備（interactCells）。未解決なら操作ボタンを表示する。
+    const interact = dungeonData.interactCells && dungeonData.interactCells[posKey];
+    if (interact && !interact._resolved) {
+      const interactBtn = document.createElement('button');
+      interactBtn.textContent = interact.label;
+      interactBtn.onclick = () => handleAction(interact.action);
+      choices.appendChild(interactBtn);
+    }
+
+    const front = DIRS[player.facing];
+    if (isFloor(player.x + front.dx, player.y + front.dy)) {
+      const btn = document.createElement('button');
+      btn.textContent = '前進';
+      btn.onclick = () => { imageFlipped = false; moveTo(player.x + front.dx, player.y + front.dy); };
+      choices.appendChild(btn);
+    }
+    const turnLeftBtn = document.createElement('button');
+    turnLeftBtn.textContent = '左を向く';
+    turnLeftBtn.onclick = () => { player.facing = (player.facing + 3) % 4; imageFlipped = false; render(); };
+    choices.appendChild(turnLeftBtn);
+
+    const turnRightBtn = document.createElement('button');
+    turnRightBtn.textContent = '右を向く';
+    turnRightBtn.onclick = () => { player.facing = (player.facing + 1) % 4; imageFlipped = false; render(); };
+    choices.appendChild(turnRightBtn);
+
+    const turnAroundBtn = document.createElement('button');
+    turnAroundBtn.textContent = '振り返る';
+    turnAroundBtn.onclick = () => { player.facing = (player.facing + 2) % 4; imageFlipped = !imageFlipped; render(); };
+    choices.appendChild(turnAroundBtn);
+  }
+
+  renderMinimap();
+}
+
+function handleAction(action) {
+  if (action === 'event_stairs_down') {
+    // フロア1(3,3)の階段 → フロア2(7,2)の階段の踊り場へ
+    enterFloor(2, 7, 2, 2);
+    return;
+  }
+  if (action === 'event_stairs_up') {
+    // フロア2(7,2)の階段 → フロア1(3,3)の階段の踊り場へ
+    enterFloor(1, 3, 3, 2);
+    return;
+  }
+  if (action === 'pull_lever_1') {
+    dungeonData.gateCells['0,9'].open = true;
+    dungeonData.interactCells['15,9']._resolved = true;
+    _dungeonMessage = '東の壁のレバーを引くと、重い音を立てて西の落とし格子が持ち上がった。';
+    render();
+    return;
+  }
+  alert(`アクション実行: ${action}\n（本来はゲーム内イベント処理を呼び出す）`);
+}
+
+// ============================================================
+// 戦闘（逃走ロジックのみ実装。戦闘本体はスタブ）
+// ============================================================
+function startCombat(combatId, roomId) {
+  const def = MONSTER_DEFS[combatId] || { name: combatId, mr: 10 };
+  combatState = {
+    combatId, roomId,
+    monster: { name: def.name, mr: def.mr, hp: def.mr, maxHp: def.mr },
+    log: [`${def.name}が現れた！（MR${def.mr}）`],
+    playerDead: false,
+  };
+  render();
+}
+
+// 1ラウンド分の戦闘解決：プレイヤー側ロール vs モンスター側ロールの合計比較、
+// 差分ダメージを負けた側に与える（ooon_ruleset_export.json の combatResolution 準拠）
+function resolveCombatRound(){
+  const m = combatState.monster;
+  const pRoll = playerCombatRoll(player);
+  const eRoll = monsterRoll(m.mr);
+
+  combatState.log.push(`― プレイヤー: ${pRoll.die}+加算${pRoll.adds >= 0 ? '+' : ''}${pRoll.adds} = ${pRoll.total}／${m.name}: ${eRoll.diceCount}D6+${eRoll.flatBonus} = ${eRoll.total}`);
+
+  if (pRoll.total > eRoll.total) {
+    const dmg = pRoll.total - eRoll.total;
+    m.hp -= dmg;
+    combatState.log.push(`${m.name}に${dmg}ダメージ！（残りHP ${Math.max(m.hp,0)}/${m.maxHp}）`);
+  } else if (eRoll.total > pRoll.total) {
+    const rawDmg = eRoll.total - pRoll.total;
+    const armor = getArmorValue(player);
+    const dmg = Math.max(0, rawDmg - armor);
+    player.con -= dmg;
+    combatState.log.push(`${m.name}の反撃！ ${dmg}ダメージを受けた${armor > 0 ? `（防具で${Math.min(rawDmg,armor)}軽減）` : ''}（残りHP ${Math.max(player.con,0)}/${player.maxCon}）`);
+  } else {
+    combatState.log.push('痛み分け（ダメージなし）');
+  }
+
+  if (player.con <= 0) {
+    player.con = 0;
+    combatState.playerDead = true;
+    combatState.log.push(`${player.name}は倒れた……`);
+    return;
+  }
+
+  if (m.hp <= 0) {
+    // 勝利：APを獲得しレベルを再計算、部屋を解決済みにする
+    const apGain = Math.max(1, Math.floor(m.maxHp / 1)); // 生存メンバー数=1（ソロ）
+    player.ap += apGain;
+    const newLevel = levelFromAP(player.ap);
+    const leveledUp = newLevel > player.level;
+    player.level = newLevel;
+    combatState.log.push(`${m.name}を倒した！ AP+${apGain}（累計${player.ap}）`);
+    if (leveledUp) combatState.log.push(`レベルが${player.level}に上がった！`);
+    rooms[combatState.roomId]._resolved = true;
+    combatState.won = true;
+  }
+}
+
+function renderCombat() {
+  const viewArea = document.getElementById('viewArea');
+  const debugInfo = document.getElementById('debugInfo');
+  const description = document.getElementById('description');
+  const choices = document.getElementById('choices');
+  choices.innerHTML = '';
+
+  const m = combatState.monster;
+  viewArea.innerHTML = `<div style="width:480px;height:320px;background:#500;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fdd;gap:8px">
+    <div style="font-size:16px">${m.name}</div>
+    <div style="font-size:12px">HP ${Math.max(m.hp,0)} / ${m.maxHp}</div>
+  </div>`;
+  debugInfo.textContent = '';
+  description.textContent = combatState.log.join('\n');
+
+  if (combatState.playerDead) {
+    description.textContent += '\n\n── ゲームオーバー ──';
+    const restartBtn = document.createElement('button');
+    restartBtn.textContent = '最初からやり直す';
+    restartBtn.onclick = () => location.reload();
+    choices.appendChild(restartBtn);
+    return;
+  }
+
+  if (combatState.won) {
+    const continueBtn = document.createElement('button');
+    continueBtn.textContent = '続ける';
+    continueBtn.onclick = () => { combatState = null; render(); };
+    choices.appendChild(continueBtn);
+    return;
+  }
+
+  const fightBtn = document.createElement('button');
+  fightBtn.textContent = '戦う';
+  fightBtn.onclick = () => {
+    resolveCombatRound();
+    render();
+  };
+  choices.appendChild(fightBtn);
+
+  const fleeBtn = document.createElement('button');
+  fleeBtn.textContent = '逃げる';
+  fleeBtn.onclick = () => {
+    const result = attemptFlee(player.spd);
+    combatState.log.push(`逃走判定: 出目合計${result.roll.total} + SPD${player.spd} → ${result.reason}`);
+    if (result.success) {
+      rooms[combatState.roomId]._resolved = true;
+      combatState = null;
+    }
+    render();
+  };
+  choices.appendChild(fleeBtn);
+}
+
+// ============================================================
+// ミニマップ（デバッグ用の俯瞰表示）
+// ============================================================
+function renderMinimap() {
+  const minimap = document.getElementById('minimap');
+  let html = '<table>';
+  for (let y = 0; y < dungeonData.height; y++) {
+    html += '<tr>';
+    for (let x = 0; x < dungeonData.tiles[y].length; x++) {
+      const isWall = dungeonData.tiles[y][x] === '#';
+      const isPlayer = (x === player.x && y === player.y);
+      const isRoom = !!roomIdAt(x, y);
+      let cls = isWall ? 'wall' : (isRoom ? 'room' : 'floor');
+      if (isPlayer) cls = 'player';
+      const arrow = isPlayer ? ['↑','→','↓','←'][player.facing] : (isRoom ? '室' : '');
+      html += `<td class="${cls}">${arrow}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</table>';
+  minimap.innerHTML = html;
+}
+
+
+// 初期表示（キャラ作成画面のみ）
+updateRaceInfo();
+updateAddsPreview();
+
+</script>
+</body>
+</html>
