@@ -1554,6 +1554,17 @@ const DUNGEON_FLOORS = {
     // キーは "x,y,facing"（facing: 0=北 1=東 2=南 3=西）。
     viewOverrides: {
       "3,10,2": "gate_entrance.webp"
+    },
+    // 「周囲を調べる」で座標ごとに起動するカスタムイベント（examineSurroundings()参照）。
+    // text: 発見時に表示するテキスト。gold/item: 発見時に入手するもの（省略可）。
+    // once: trueなら一度発見済みになった後は再度調べても何も起こらない（repeatTextがあればそれを表示）。
+    examineCells: {
+      "3,5": {
+        text: "壁の隙間に何かが挟まっている。手を伸ばすと、古い硬貨が数枚出てきた。",
+        gold: 15,
+        once: true,
+        repeatText: "壁の隙間はもう空っぽだ。"
+      }
     }
   },
   2: {
@@ -2033,6 +2044,30 @@ function moveTo(x, y, facing){
   render();
 }
 
+// 「周囲を調べる」：現在地のexamineCellsにカスタムイベントがあれば起動し、
+// なければ汎用の「何も見つからなかった」系メッセージをランダムに表示する。
+const EXAMINE_NOTHING_MESSAGES = [
+  '特に変わったところは見当たらない。',
+  'ただの石壁と石畳が続いているだけのようだ。',
+  '注意深く見回したが、何も見つからなかった。',
+];
+function examineSurroundings(){
+  const posKey = `${player.x},${player.y}`;
+  const cell = dungeonData.examineCells && dungeonData.examineCells[posKey];
+
+  if (cell && cell.once && cell._resolved) {
+    _dungeonMessage = cell.repeatText || '特に新しい発見はない。';
+  } else if (cell) {
+    if (cell.once) cell._resolved = true;
+    if (cell.gold) player.gold += cell.gold;
+    if (cell.item) player.inventory.push({ ...cell.item });
+    _dungeonMessage = cell.text;
+  } else {
+    _dungeonMessage = EXAMINE_NOTHING_MESSAGES[Math.floor(Math.random() * EXAMINE_NOTHING_MESSAGES.length)];
+  }
+  render();
+}
+
 // 落とし穴：運Lv1判定で気づく→気づけば回避。気づかなければ落とし穴が作動し、
 // 器用さLv1判定に成功すれば間一髪回避、失敗すると1-6ダメージで転落する。
 function triggerPitTrap(trap){
@@ -2221,15 +2256,10 @@ function render() {
     };
     choices.appendChild(turnRightBtn);
 
-    const turnAroundBtn = document.createElement('button');
-    turnAroundBtn.textContent = '振り返る';
-    turnAroundBtn.onclick = () => {
-      facingWallFromStraight = false;
-      player.facing = (player.facing + 2) % 4;
-      imageFlipped = !imageFlipped;
-      render();
-    };
-    choices.appendChild(turnAroundBtn);
+    const examineBtn = document.createElement('button');
+    examineBtn.textContent = '周囲を調べる';
+    examineBtn.onclick = examineSurroundings;
+    choices.appendChild(examineBtn);
   }
 
   renderMinimap();
