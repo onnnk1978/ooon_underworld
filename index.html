@@ -178,6 +178,23 @@ body{display:flex;flex-direction:column;align-items:center;
   .room { background:#341; color:#dfa; }
   .player { background:#c33; color:#fff; font-weight:bold; }
 
+  /* ── 通路移動の方向操作（ミニマップ右のアイコンパッド） ── */
+  #nav-controls {
+    display: grid;
+    grid-template-columns: repeat(3, 44px);
+    grid-template-rows: repeat(2, 44px);
+    gap: 6px;
+    align-content: start;
+  }
+  #nav-controls button {
+    padding: 0; margin: 0; font-size: 18px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #nav-controls .nav-forward { grid-column: 2; grid-row: 1; }
+  #nav-controls .nav-left    { grid-column: 1; grid-row: 2; }
+  #nav-controls .nav-examine { grid-column: 2; grid-row: 2; font-size: 15px; }
+  #nav-controls .nav-right   { grid-column: 3; grid-row: 2; }
+
   /* ── ミニHUD（OOON本家 #dt-mini-hud を移植） ── */
   #hud {
     width:480px; max-width:94vw; margin-bottom:10px;
@@ -359,6 +376,10 @@ body{display:flex;flex-direction:column;align-items:center;
 
 <div style="display:flex; align-items:flex-start; gap:12px; width:480px; max-width:94vw;">
 <div id="minimap"></div>
+
+<!-- 通路移動中の方向操作（前進／左右を向く／周囲を調べる）をアイコンボタンで表示する。
+     能力値テスト中はstartDiceTest()側でクリアされ、部屋・戦闘中はrender()冒頭でクリアされる。 -->
+<div id="nav-controls"></div>
 
 <!-- ダンジョン探索中の能力値テスト（落とし穴など）は画面遷移せず、ミニマップの右側にインライン表示する -->
 <div id="dice-test-inline" class="hidden" style="flex:1; min-width:0;">
@@ -937,7 +958,10 @@ function startDiceTest(actor, attr, onDone, { inline = false } = {}){
  const attrLabel = ATTR_LABEL_JP[attr] || attr;
  const els = _diceTestEls(inline);
 
- if (inline) document.getElementById('choices').innerHTML = '';
+ if (inline) {
+  document.getElementById('choices').innerHTML = '';
+  document.getElementById('nav-controls').innerHTML = '';
+ }
 
  document.getElementById(els.screen).classList.remove('hidden');
  document.getElementById(els.dd).innerHTML =
@@ -2119,6 +2143,7 @@ function render() {
   const description = document.getElementById('description');
   const choices = document.getElementById('choices');
   choices.innerHTML = '';
+  document.getElementById('nav-controls').innerHTML = '';
 
   // 罠などによるダンジョン内ゲームオーバー（戦闘死亡とは別経路）
   if (_dungeonGameOverMessage) {
@@ -2226,38 +2251,50 @@ function render() {
       choices.appendChild(interactBtn);
     }
 
+    // 方向操作はテキストボタンではなく、ミニマップ右のアイコンパッド（#nav-controls）に表示する。
+    const navControls = document.getElementById('nav-controls');
+
     const front = DIRS[player.facing];
     const canMoveForward = isFloor(player.x + front.dx, player.y + front.dy);
     const forwardBtn = document.createElement('button');
-    forwardBtn.textContent = '前進';
+    forwardBtn.className = 'nav-forward';
+    forwardBtn.title = '前進';
+    forwardBtn.innerHTML = '&#11014;';
     forwardBtn.onclick = canMoveForward
       ? () => { imageFlipped = false; moveTo(player.x + front.dx, player.y + front.dy); }
       : () => { _dungeonMessage = '前方は壁だ。'; render(); };
-    choices.appendChild(forwardBtn);
+    navControls.appendChild(forwardBtn);
+
     const turnLeftBtn = document.createElement('button');
-    turnLeftBtn.textContent = '左を向く';
+    turnLeftBtn.className = 'nav-left';
+    turnLeftBtn.title = '左を向く';
+    turnLeftBtn.innerHTML = '&#11013;';
     turnLeftBtn.onclick = () => {
       facingWallFromStraight = (viewType === 'straight');
       player.facing = (player.facing + 3) % 4;
       imageFlipped = false;
       render();
     };
-    choices.appendChild(turnLeftBtn);
+    navControls.appendChild(turnLeftBtn);
 
     const turnRightBtn = document.createElement('button');
-    turnRightBtn.textContent = '右を向く';
+    turnRightBtn.className = 'nav-right';
+    turnRightBtn.title = '右を向く';
+    turnRightBtn.innerHTML = '&#10145;';
     turnRightBtn.onclick = () => {
       facingWallFromStraight = (viewType === 'straight');
       player.facing = (player.facing + 1) % 4;
       imageFlipped = false;
       render();
     };
-    choices.appendChild(turnRightBtn);
+    navControls.appendChild(turnRightBtn);
 
     const examineBtn = document.createElement('button');
-    examineBtn.textContent = '周囲を調べる';
+    examineBtn.className = 'nav-examine';
+    examineBtn.title = '周囲を調べる';
+    examineBtn.innerHTML = '&#128269;';
     examineBtn.onclick = examineSurroundings;
-    choices.appendChild(examineBtn);
+    navControls.appendChild(examineBtn);
   }
 
   renderMinimap();
