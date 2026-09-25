@@ -87,12 +87,12 @@ body{display:flex;flex-direction:column;align-items:center;
  width:100%;height:100vh;max-width:480px;display:flex;flex-direction:column;
  align-items:center;justify-content:center;background:var(--screen);padding:20px 16px;
 }
-#dice-area{
+#dice-area, .dice-area{
  width:100%;margin:0;padding:18px;
  background:#0e0c06;border:2px solid #484848;border-radius:4px;
 }
-#dice-area h3{color:#f0ece0;margin-bottom:8px;font-size:calc(var(--font-base) + 1px);text-align:center}
-#dd{color:var(--white);margin-bottom:10px;line-height:2.4;font-size:calc(var(--font-lg) + 4px);text-align:center}
+#dice-area h3, .dice-area h3{color:#f0ece0;margin-bottom:8px;font-size:calc(var(--font-base) + 1px);text-align:center}
+#dd, #dd-inline{color:var(--white);margin-bottom:10px;line-height:2.4;font-size:calc(var(--font-lg) + 4px);text-align:center}
 .dr-result{font-size:calc(var(--font-lg) + 4px);color:#f0ece0;margin:8px 0;min-height:40px;
  display:flex;align-items:center;justify-content:center;text-align:center;line-height:2}
 .roll-btn{
@@ -350,6 +350,16 @@ body{display:flex;flex-direction:column;align-items:center;
 <div id="choices"></div>
 
 <div id="minimap"></div>
+
+<!-- ダンジョン探索中の能力値テスト（落とし穴など）は画面遷移せず、ここにインライン表示する -->
+<div id="dice-test-inline" class="hidden" style="width:480px;max-width:94vw;margin-top:16px">
+ <div class="dice-area">
+  <h3> 能力値テスト</h3>
+  <div id="dd-inline"></div>
+  <div class="dr-result" id="dres-inline">──  ──</div>
+  <button class="roll-btn" id="rl-btn-inline" onclick="doRoll()">▶ ROLL THE DICE!</button>
+ </div>
+</div>
 </div>
 
 <script>
@@ -716,21 +726,34 @@ function handleStoryAction(){
  startDiceTest(_pendingPC, 'spd', onDodgeCheckResolved);
 }
 
+// 能力値テストの表示先要素をまとめて返す。
+// inline=false: キャラ作成時の全画面 #dice-test-screen（従来どおり）。
+// inline=true : ダンジョン探索中、画面遷移せず #dice-test-inline に埋め込んで表示する。
+function _diceTestEls(inline){
+ return inline
+  ? { screen:'dice-test-inline', dd:'dd-inline', dres:'dres-inline', btn:'rl-btn-inline' }
+  : { screen:'dice-test-screen', dd:'dd', dres:'dres', btn:'rl-btn' };
+}
+
 // 能力値テスト画面をセットアップして表示する（OOON本家 setupSavingRoll() 相当）。
 // actor: 判定を行うキャラ（キャラ作成直後は_pendingPC、ダンジョン探索中はplayer）。
 // 呼び出し側が事前に自分の画面を隠しておく（このダイス画面自体の表示/非表示のみここで管理する）。
-function startDiceTest(actor, attr, onDone){
- _diceTestPending = { actor, attr, onDone };
+// inline: trueならダンジョン画面を隠さずインラインパネルに表示する（探索中の罠判定などに使用）。
+function startDiceTest(actor, attr, onDone, { inline = false } = {}){
+ _diceTestPending = { actor, attr, onDone, inline };
  const target = actor.level * 5 + 15;
  const attrVal = actor[attr];
  const attrLabel = ATTR_LABEL_JP[attr] || attr;
+ const els = _diceTestEls(inline);
 
- document.getElementById('dice-test-screen').classList.remove('hidden');
- document.getElementById('dd').innerHTML =
+ if (inline) document.getElementById('choices').innerHTML = '';
+
+ document.getElementById(els.screen).classList.remove('hidden');
+ document.getElementById(els.dd).innerHTML =
   `<span style="color:var(--white)">Lv${actor.level} ${attrLabel}(${attrVal})</span><br>目標: 2D6+${attrVal} ≥ <span style="color:var(--white)">${target}</span>`;
- const dres = document.getElementById('dres');
+ const dres = document.getElementById(els.dres);
  dres.textContent = '──  ──';
- const btn = document.getElementById('rl-btn');
+ const btn = document.getElementById(els.btn);
  btn.disabled = false;
  btn.textContent = '▶ ROLL THE DICE!';
  btn.onclick = doRoll;
@@ -759,18 +782,19 @@ function _resolveDiceTest(result){
  let doublesStr = '';
  for (let i = 2; i < roll.dice.length; i += 2) doublesStr += ' +';
 
- const dres = document.getElementById('dres');
+ const els = _diceTestEls(pending.inline);
+ const dres = document.getElementById(els.dres);
  if (result.autoFail){
   dres.innerHTML = `${diceStr(roll.dice)}=<span style="color:#f0ece0">${roll.firstTotal}</span>　<span style="color:var(--white)">自動失敗</span>（出目5未満）　経験値+${apGain}`;
  } else {
   dres.innerHTML = `${diceStr(roll.dice)}=<span style="color:#f0ece0">${roll.total}</span>${doublesStr}　合計: ${roll.total}+${attrVal}=<span style="color:#f0ece0">${roll.total + attrVal}</span>（目標${result.target}）　${result.success ? '<span style="color:var(--white)">成功</span>' : '<span style="color:var(--white)">失敗</span>'}　経験値+${apGain}`;
  }
 
- const btn = document.getElementById('rl-btn');
+ const btn = document.getElementById(els.btn);
  btn.disabled = false;
  btn.textContent = '▶ DONE';
  btn.onclick = () => {
-  document.getElementById('dice-test-screen').classList.add('hidden');
+  document.getElementById(els.screen).classList.add('hidden');
   _diceTestPending = null;
   pending.onDone(result);
  };
@@ -1323,11 +1347,10 @@ function moveTo(x, y, facing){
 // 落とし穴：運Lv1判定で気づく→気づけば回避。気づかなければ落とし穴が作動し、
 // 器用さLv1判定に成功すれば間一髪回避、失敗すると1-6ダメージで転落する。
 function triggerPitTrap(trap){
-  document.getElementById('dungeon-screen').classList.add('hidden');
+  // ダンジョン画面は隠さず、能力値テストはインラインパネル（#dice-test-inline）に表示する。
   startDiceTest(player, 'lk', (noticeResult) => {
     if (noticeResult.success){
       trap._resolved = true;
-      document.getElementById('dungeon-screen').classList.remove('hidden');
       _dungeonMessage = '床の一部に不自然な継ぎ目があるのに気づいた。慎重に踏み外さないよう避けて進む。';
       render();
       return;
@@ -1336,14 +1359,12 @@ function triggerPitTrap(trap){
     startDiceTest(player, 'dex', (dodgeResult) => {
       trap._resolved = true;
       if (dodgeResult.success){
-        document.getElementById('dungeon-screen').classList.remove('hidden');
         _dungeonMessage = '突然、足元の床が抜けた！ ―― だが間一髪、身を翻して落とし穴を回避した。';
         render();
         return;
       }
       const dmg = d6();
       player.con -= dmg;
-      document.getElementById('dungeon-screen').classList.remove('hidden');
       if (player.con <= 0){
         player.con = 0;
         _dungeonGameOverMessage = `突然、足元の床が抜けた！ 為す術もなく深い縦穴の底へ落下し（${dmg}ダメージ）、そのまま帰らぬ人となった……`;
@@ -1352,8 +1373,8 @@ function triggerPitTrap(trap){
       }
       _dungeonMessage = `突然、足元の床が抜けた！ 落とし穴に転落し、${dmg}ダメージを受けた（残りHP ${player.con}/${player.maxCon}）。`;
       render();
-    });
-  });
+    }, { inline: true });
+  }, { inline: true });
 }
 
 // フロア間の移動（階段など）。dungeonDataの参照を切り替えて指定座標へ配置する。
