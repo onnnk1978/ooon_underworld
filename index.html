@@ -973,7 +973,10 @@ const viewPatterns = {
   fork_left:      ["fork_left_01.webp","fork_left_02","fork_left_03","fork_left_04","fork_left_05"],
   fork_right:     ["fork_right_01.webp","fork_right_02","fork_right_03","fork_right_04","fork_right_05"],
   t_junction:     ["t_junction_01.webp","t_junction_02.webp","t_junction_03.webp","t_junction_04.webp","t_junction_05.webp"],
-  cross_junction: ["cross_junction_01.webp","cross_junction_02.webp","cross_junction_03.webp","cross_junction_04.webp","cross_junction_05.webp"]
+  cross_junction: ["cross_junction_01.webp","cross_junction_02.webp","cross_junction_03.webp","cross_junction_04.webp","cross_junction_05.webp"],
+  // getViewType()の8パターンには含まれない特殊枠。直進通路（straight）で左右を
+  // 向いたとき（＝必ず壁に正対する）専用の、素っ気ない壁アップの画像群。
+  wall:           ["wall_01.webp","wall_02.webp","wall_03.webp","wall_04.webp","wall_05.webp"]
 };
 
 // 実画像が用意済みのファイル名一覧（ここに載っていれば images/ から <img> 表示、
@@ -1014,7 +1017,11 @@ const AVAILABLE_IMAGE_FILES = new Set([
   "dead_end_02.webp",
   "room_ambush.webp",
   "room_altar.webp",
-  "gate_entrance.webp"
+  "gate_entrance.webp",
+  "wall_01.webp",
+  "wall_02.webp",
+  "wall_03.webp",
+  "wall_04.webp"
 ]);
 
 // 画像があれば<img>、なければプレースホルダーdivを表示するHTMLを組み立てる共通ヘルパー。
@@ -1037,6 +1044,13 @@ let combatState = null;
 // 同じ画像を左右反転して表示する（バリエーション不足による唐突な絵の切り替わりを避けるため）。
 let lastCorridorVariant = null;
 let imageFlipped = false;
+
+// 直進通路（viewType==='straight'）で「左を向く／右を向く」をした直後だけtrueになる。
+// straightは定義上、正面以外（左右）が壁なので、向きを変えた瞬間は必ず壁に正対する。
+// その場面ではgetViewType由来のt_junction/corner等の画像ではなく、
+// 専用の壁アップ画像（viewPatterns.wall）を表示する。
+// 前進・振り返る・部屋移動・フロア移動をすると通常の表示に戻る。
+let facingWallFromStraight = false;
 
 const DIRS = [
   { name:"north", label:"北", dx:0, dy:-1 },
@@ -1243,6 +1257,7 @@ function moveTo(x, y, facing){
   player.x = x;
   player.y = y;
   if (facing !== undefined) player.facing = facing;
+  facingWallFromStraight = false;
 
   const trap = dungeonData.trapCells[`${x},${y}`];
   if (trap && !trap._resolved && trap.type === 'pit') {
@@ -1296,6 +1311,7 @@ function enterFloor(floorNum, x, y, facing){
   player.facing = facing;
   imageFlipped = false;
   lastCorridorVariant = null;
+  facingWallFromStraight = false;
   render();
 }
 
@@ -1379,6 +1395,10 @@ function render() {
       imageFlipped = false;
       variant = { image: overrideImage, index: -1, isOverride: true };
       lastCorridorVariant = variant;
+    } else if (facingWallFromStraight) {
+      imageFlipped = false;
+      variant = pickVariant(dungeonData.floor, player.x, player.y, player.facing, 'wall');
+      lastCorridorVariant = variant;
     } else if (imageFlipped && lastCorridorVariant && !lastCorridorVariant.isOverride) {
       variant = lastCorridorVariant;
     } else {
@@ -1418,17 +1438,32 @@ function render() {
     }
     const turnLeftBtn = document.createElement('button');
     turnLeftBtn.textContent = '左を向く';
-    turnLeftBtn.onclick = () => { player.facing = (player.facing + 3) % 4; imageFlipped = false; render(); };
+    turnLeftBtn.onclick = () => {
+      facingWallFromStraight = (viewType === 'straight');
+      player.facing = (player.facing + 3) % 4;
+      imageFlipped = false;
+      render();
+    };
     choices.appendChild(turnLeftBtn);
 
     const turnRightBtn = document.createElement('button');
     turnRightBtn.textContent = '右を向く';
-    turnRightBtn.onclick = () => { player.facing = (player.facing + 1) % 4; imageFlipped = false; render(); };
+    turnRightBtn.onclick = () => {
+      facingWallFromStraight = (viewType === 'straight');
+      player.facing = (player.facing + 1) % 4;
+      imageFlipped = false;
+      render();
+    };
     choices.appendChild(turnRightBtn);
 
     const turnAroundBtn = document.createElement('button');
     turnAroundBtn.textContent = '振り返る';
-    turnAroundBtn.onclick = () => { player.facing = (player.facing + 2) % 4; imageFlipped = !imageFlipped; render(); };
+    turnAroundBtn.onclick = () => {
+      facingWallFromStraight = false;
+      player.facing = (player.facing + 2) % 4;
+      imageFlipped = !imageFlipped;
+      render();
+    };
     choices.appendChild(turnAroundBtn);
   }
 
