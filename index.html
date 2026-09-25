@@ -338,6 +338,7 @@ body{display:flex;flex-direction:column;align-items:center;
 <div id="hud">
   <div class="mh-top">
     <div class="mh-name" id="mh-name">-</div>
+    <button onclick="openStatusPanel()" title="ステータス" style="background:#150f06;border:1px solid var(--border);color:var(--white2);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:3px 8px;cursor:pointer;border-radius:2px"> ステータス</button>
   </div>
   <div class="mh-bars" id="mh-bars"></div>
 </div>
@@ -362,6 +363,48 @@ body{display:flex;flex-direction:column;align-items:center;
  </div>
 </div>
 </div>
+</div>
+
+<!-- ステータス確認パネル（OOON本家 #stpanel-status を移植。オーバーレイ表示） -->
+<div id="status-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;display:flex;justify-content:center;align-items:flex-start;padding:20px 16px;overflow-y:auto">
+ <div style="width:100%;max-width:480px;background:var(--ink);border:2px solid var(--border);border-radius:4px;padding:14px;font-family:system-ui,sans-serif">
+
+  <!-- 名前・種族・職業 -->
+  <div style="text-align:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--earth)">
+   <div id="sp-name" style="font-size:calc(var(--font-lg) + 2px);color:#f0ece0;margin-bottom:2px"></div>
+   <div id="sp-subtitle" style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)"></div>
+  </div>
+
+  <!-- 年齢・身長体重 -->
+  <div style="margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--earth)">
+   <div style="display:flex;justify-content:space-between">
+    <span style="font-size:calc(var(--font-sm) + 1px);color:#ece8e0" id="sp-age"></span>
+    <span style="font-size:var(--font-sm);color:var(--dim)" id="sp-size"></span>
+   </div>
+  </div>
+
+  <!-- 能力値 -->
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 能力値 ──</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px" id="sp-attrs"></div>
+
+  <!-- 戦闘値 -->
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 戦闘値 ──</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px" id="sp-combat"></div>
+
+  <!-- 冒険 -->
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 冒険 ──</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:10px" id="sp-adv"></div>
+
+  <!-- 装備 -->
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 装備 ──</div>
+  <div id="sp-equip" style="margin-bottom:10px"></div>
+
+  <!-- 言語 -->
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 言語 ──</div>
+  <div id="sp-languages" style="margin-bottom:14px;font-size:var(--font-sm);color:#ece8e0"></div>
+
+  <button onclick="closeStatusPanel()" style="width:100%;font-size:calc(var(--font-sm) - 1px);padding:12px;background:#120f06;border:2px solid var(--border);color:#f0ece0;font-family:system-ui,sans-serif;cursor:pointer;border-radius:4px"> 閉じる</button>
+ </div>
 </div>
 
 <script>
@@ -897,6 +940,84 @@ function renderHUD(){
    { l:'運',    v:player.lk,                         cls:'' },
   ].map(c => `<div class="mh-cell ${c.cls}"><span class="lbl">${c.l}</span><span class="val">${c.v}</span></div>`).join('');
  }
+}
+
+// ステータス確認パネル（OOON本家 renderStatusPanel() 相当。このダンジョンクローラーが
+// 実際に持っているフィールドだけに絞って構成する：食料・重量・寿命・性格・背景などは未実装）。
+function openStatusPanel(){
+ if (!player) return;
+ renderStatusPanel();
+ document.getElementById('status-overlay').classList.remove('hidden');
+}
+
+function closeStatusPanel(){
+ document.getElementById('status-overlay').classList.add('hidden');
+}
+
+function renderStatusPanel(){
+ const raceLabel = RACE_LABEL_JP[player.race] || player.race;
+ const typeLabel = TYPE_LABEL_JP[player.type] || player.type;
+
+ document.getElementById('sp-name').textContent = player.name;
+ document.getElementById('sp-subtitle').textContent = `${raceLabel} ${typeLabel} Lv${player.level}`;
+ document.getElementById('sp-age').textContent = `${player.age}歳`;
+ document.getElementById('sp-size').textContent = `身長 ${player.height}cm　体重 ${player.weight}kg`;
+
+ // 能力値（OOON本家と同じ7項目。STとCONのみ現在値/最大値で表示）
+ const attrEl = document.getElementById('sp-attrs');
+ attrEl.innerHTML = [
+  ['強さ', player.st, player.maxSt],
+  ['知力', player.iq, null],
+  ['運', player.lk, null],
+  ['体力', player.con, player.maxCon],
+  ['器用さ', player.dex, null],
+  ['魅力', player.chr, null],
+  ['素早さ', player.spd, null],
+ ].map(([label, val, max]) => {
+  const pct = max ? Math.max(0, val / max * 100) : null;
+  const color = max ? (pct > 50 ? 'var(--white)' : pct > 25 ? '#e0c860' : 'var(--red)') : 'var(--white)';
+  return `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:6px 8px">
+   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:3px">${label}</div>
+   <div style="font-size:calc(var(--font-base) + 1px);color:${color}">${val}${max ? `<span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">/${max}</span>` : ''}</div>
+  </div>`;
+ }).join('');
+
+ // 戦闘値
+ const adds = calcAdds(player);
+ const armor = getArmorValue(player);
+ document.getElementById('sp-combat').innerHTML = [
+  ['戦闘力修正', (adds >= 0 ? '+' : '') + adds],
+  ['防護値', armor + 'hits'],
+ ].map(([l, v]) => `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:6px 8px;text-align:center">
+   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:3px">${l}</div>
+   <div style="font-size:var(--font-base);color:var(--white)">${v}</div>
+  </div>`).join('');
+
+ // 冒険
+ document.getElementById('sp-adv').innerHTML = [
+  ['所持金', player.gold + 'GP'],
+  ['経験値', player.ap],
+  ['LV', player.level],
+ ].map(([l, v]) => `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:6px 8px;text-align:center">
+   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:3px">${l}</div>
+   <div style="font-size:var(--font-base);color:var(--gold)">${v}</div>
+  </div>`).join('');
+
+ // 装備
+ const weapon = player.equipped && player.equipped.weapon;
+ const armorItem = player.equipped && player.equipped.armor;
+ document.getElementById('sp-equip').innerHTML = `
+  <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;margin-bottom:5px">
+   <span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">武器: </span>
+   <span style="font-size:var(--font-sm);color:#f0ece0">${weapon ? weapon.name : 'なし（素手）'}</span>
+  </div>
+  <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px">
+   <span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">防具: </span>
+   <span style="font-size:var(--font-sm);color:#f0ece0">${armorItem ? armorItem.name : 'なし'}</span>
+  </div>`;
+
+ // 言語
+ document.getElementById('sp-languages').textContent = (player.languages || []).join('、');
 }
 
 // 初期表示
