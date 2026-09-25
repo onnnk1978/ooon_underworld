@@ -187,7 +187,7 @@ body{display:flex;flex-direction:column;align-items:center;
   }
   #hud .mh-name { font-size:calc(var(--font-sm) - 1px); color:var(--gold); }
   #hud .mh-bars {
-    display:grid; grid-template-columns:repeat(5, 1fr); gap:3px;
+    display:grid; grid-template-columns:repeat(6, 1fr); gap:3px;
   }
   #hud .mh-cell {
     background:var(--panel); border:1px solid var(--panel2); border-radius:2px;
@@ -375,11 +375,15 @@ body{display:flex;flex-direction:column;align-items:center;
    <div id="sp-subtitle" style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)"></div>
   </div>
 
-  <!-- 年齢・身長体重 -->
+  <!-- 年齢・身長体重・寿命 -->
   <div style="margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--earth)">
    <div style="display:flex;justify-content:space-between">
     <span style="font-size:calc(var(--font-sm) + 1px);color:#ece8e0" id="sp-age"></span>
     <span style="font-size:var(--font-sm);color:var(--dim)" id="sp-size"></span>
+   </div>
+   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-top:4px" id="sp-lifespan-lbl"></div>
+   <div style="background:#050505;border-radius:3px;height:5px;margin-top:3px;overflow:hidden">
+    <div id="sp-life-bar" style="height:100%;width:0%"></div>
    </div>
   </div>
 
@@ -389,15 +393,23 @@ body{display:flex;flex-direction:column;align-items:center;
 
   <!-- 戦闘値 -->
   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 戦闘値 ──</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px" id="sp-combat"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:10px" id="sp-combat"></div>
 
   <!-- 冒険 -->
   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 冒険 ──</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:10px" id="sp-adv"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;margin-bottom:10px" id="sp-adv"></div>
 
   <!-- 装備 -->
   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 装備 ──</div>
   <div id="sp-equip" style="margin-bottom:10px"></div>
+
+  <!-- 性格 -->
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 性格 ──</div>
+  <div id="sp-alignment" style="margin-bottom:10px"></div>
+
+  <!-- 背景 -->
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 背景 ──</div>
+  <div id="sp-background" style="margin-bottom:10px"></div>
 
   <!-- 言語 -->
   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 言語 ──</div>
@@ -539,6 +551,126 @@ function rollLanguages(pc){
    if(!pc.languages.includes(lang)) pc.languages.push(lang);
   }
  }
+}
+
+// ── 背景（家系・動機。OOON本家 BG_FAMILY/BG_MOTIVE/rollBackground() から、
+//    今後のクエスト連動用タグ（tag/clue/target等）を除いた表示用テキストのみ移植） ──
+const BG_FAMILY = {
+ human: [
+  '農村の貧しい農家の出身。幼い頃から畑仕事に追われた。',
+  '街の商人の家に生まれたが、店は父の借金で潰れた。',
+  '元兵士の父を持つ。戦場で戦う背中を見て育った。',
+  '孤児院で育った。自分の本当の名前すら知らない。',
+  '地方の小領主の末っ子。家督は長兄が継いだ。',
+  '港町の漁師一家の出身。海の匂いとともに育った。',
+  '旅芸人の一座で育った。定住したことは一度もない。',
+  '神殿に仕える神官の家系。信仰と共に育った。',
+ ],
+ elf: [
+  '森の古い一族の血を引く。人間の時の流れとは違う時間を生きてきた。',
+  '滅んだエルフの集落の唯一の生き残り。故郷は灰になった。',
+  '都市に溶け込もうとした混血の家系に生まれた。',
+  '長老評議会に仕える家の出身。儀礼と慣習の中で育った。',
+ ],
+ dwarf: [
+  '地下鉱山都市の採掘師の家系。岩と金属の臭いを纏って育った。',
+  '鍛冶師の名門の出身だが、自分には才能がなかった。',
+  '山岳の要塞都市で育った。外の世界を見たことがなかった。',
+  '一族は人間との交易で栄えた。人の言葉は流暢に話せる。',
+ ],
+ halfling: [
+  '牧歌的な村の農家の出身。村を出たことは一度もなかった。',
+  '行商人の家に生まれ、幼い頃から旅慣れている。',
+  '小さな村の村長の家系。責任と期待の中で育った。',
+  '気ままな一人旅の好きな変わり者の家系の出身。',
+ ],
+ fairy: [
+  '花の森の奥深くに住む一族の出身。人間の世界に好奇心を持った。',
+  '妖精の輪の踊り手として育ったが、外の世界に憧れた。',
+  '魔法の泉の守り手の家系。古い魔法の知識を持って生まれた。',
+  '嵐で故郷の森を追われ、地上の世界に降り立った。',
+ ],
+ leprechaun: [
+  '金貨の隠し場所を守る一族の出身。財宝への執着は誰より強い。',
+  '幸運の靴職人の家系。人間に捕まった経験が冒険心に火をつけた。',
+  '虹の麓に住む一族。夢と幻術を操る術を学んで育った。',
+  '悪戯好きな家系の出身。ある悪戯が過ぎて村を追われた。',
+ ],
+ troll: [
+  '一族の掟に背き、仲間を手にかけることを拒んで山を追われた。二度と戻れない。',
+  '混沌の軍勢に一族の集落を焼かれた、数少ない生き残り。行く当てもなく人里へ流れ着いた。',
+  '幼い頃、人間の集落に迷い込んで拾われた。育ての親は既にいないが、共通語だけは達者だ。',
+  '同族の誰よりも小柄で非力だと蔑まれ続けた。証明するために故郷を出た。',
+ ],
+ ogre: [
+  '群れの頭を継ぐ座を賭けた戦いに敗れ、生き延びる道として放浪を選んだ。',
+  '人間の傭兵隊に囚われ、戦働きと引き換えに命を拾った。今も足枷の跡が残る。',
+  '一族の誰も知らない「外の世界」への好奇心を抑えられず、自ら群れを離れた。',
+  '混沌に住処を奪われた流民の一団の生き残り。仲間はもう誰も残っていない。',
+ ],
+ orc: [
+  '略奪を是とする一族の因習に嫌気が差し、剣を置いて出奔した。',
+  '人間との交易を担う数少ない一族の生まれで、共通語も交渉ごとも心得ている。',
+  '戦で捕虜となり、労役の末に自由を買い戻した。今も鎖の重さを覚えている。',
+  '一族の中では変わり者と呼ばれた。同族の荒々しさより、遠い土地の話に惹かれた。',
+ ],
+ goblin: [
+  '群れの中の序列争いに疲れ、単身で外の世界に飛び出した。',
+  '盗品の目利きとして人間の裏社会に拾われ、そのまま居着いた。',
+  '一族の縄張りが人間の開拓で奪われ、住処を失った末の放浪。',
+  '好奇心旺盛な性分が災いし、余所者扱いされて群れを追い出された。',
+ ],
+};
+
+const BG_MOTIVE = {
+ warrior: [
+  '借金を返すために剣を取った。剣一本が唯一の資産だ。',
+  '幼馴染の仇を探している。手がかりは古い紋章だけ。',
+  '強さへの純粋な渇望。世界で一番強い者と戦ってみたい。',
+  '家族を養うために冒険者になった。故郷には母と妹がいる。',
+  '軍を追放された。汚名を雪ぐ方法を探している。',
+  '戦いの中にしか生きている実感を得られない。',
+  '財宝を手に入れて楽な生活を送りたい。ただそれだけだ。',
+  'ある古代の遺跡の噂を聞いた。その秘密を暴きたい。',
+ ],
+ wizard: [
+  '師匠が残した謎の書物を解読するための資金が必要だ。',
+  '禁断の魔法を研究するために追放された。今は独り立ちしている。',
+  '魔法の才に恵まれながらも神殿に入れず、野に出た。',
+  '伝説の魔法書を探している。それがあれば全てが分かるはずだ。',
+  '魔法の実験で故郷の村を焼いてしまった。償いの旅をしている。',
+  '知識への飽くなき欲求。この世の全ての秘密を知りたい。',
+  '師匠の死の謎を追っている。手がかりは古い呪文の断片だ。',
+  '魔法で稼げると思ったが、思ったより世間は厳しかった。',
+ ],
+};
+
+function rollBackground(race, type){
+ const familyList = BG_FAMILY[race] || BG_FAMILY.human;
+ const motiveList = BG_MOTIVE[type] || BG_MOTIVE.warrior;
+ return {
+  family: familyList[Math.floor(Math.random() * familyList.length)],
+  motive: motiveList[Math.floor(Math.random() * motiveList.length)],
+ };
+}
+
+// ── 性格（アライメント。OOON本家 ALIGNMENT SYSTEM から移植）。
+//    善悪(ethics)・秩序混沌(order)の2軸、各-100〜100。キャラ作成直後は0（真の中立）から始まり、
+//    今後ダンジョン内の選択肢イベントで changeAlignment() により変動させる想定（現状は固定）。
+function getAlignmentLabel(ethics, order){
+ const e = ethics || 0;
+ const o = order || 0;
+ const ethicsLabel = e >= 34 ? '善' : e <= -34 ? '悪' : '中立';
+ const orderLabel = o >= 34 ? '秩序' : o <= -34 ? '混沌' : '中庸';
+ if (ethicsLabel === '中立' && orderLabel === '中庸') return '真の中立';
+ if (ethicsLabel === '中立') return `${orderLabel}・中立`;
+ if (orderLabel === '中庸') return e >= 34 ? '善よりの中庸' : '悪よりの中庸';
+ return `${orderLabel}にして${ethicsLabel}`;
+}
+
+function changeAlignment(ethicsDelta, orderDelta, pc){
+ if (ethicsDelta) pc.alignment_ethics = Math.max(-100, Math.min(100, (pc.alignment_ethics||0) + ethicsDelta));
+ if (orderDelta) pc.alignment_order = Math.max(-100, Math.min(100, (pc.alignment_order||0) + orderDelta));
 }
 
 // ── NPC名候補（ランダム名ボタン用） ──
@@ -719,6 +851,17 @@ function buildCharacter(){
  pc.age = 15 + Math.floor(Math.random() * 16); // 15〜30歳
  pc.lifespan = rollLifespan(race);
  rollLanguages(pc);
+
+ // 性格（善悪・秩序混沌）は経験を積んでいない冒険者として真の中立(0,0)からスタートする。
+ pc.alignment_ethics = 0;
+ pc.alignment_order = 0;
+
+ // 背景（家系・動機）
+ pc.background = rollBackground(race, pc.type);
+
+ // 携行食料。ダンジョン内を一定歩数進むごとに1消費される（tickFoodOnStep()参照）。
+ pc._food = Nd6(2) + 5;
+ pc._stepsSinceMeal = 0;
 
  return pc;
 }
@@ -924,6 +1067,10 @@ function renderHUD(){
  const conPct = player.maxCon > 0 ? player.con / player.maxCon : 1;
  const conCls = player.con <= 0 ? 'critical' : conPct <= 0.25 ? 'danger' : conPct <= 0.5 ? 'warn' : '';
  const stCls = player.st <= 0 ? 'critical' : player.st <= Math.floor(player.maxSt*0.25) ? 'danger' : player.st <= Math.floor(player.maxSt*0.5) ? 'warn' : '';
+ const food = player._food || 0;
+ const foodCls = food <= 0 ? 'critical' : food <= 5 ? 'danger' : food <= 15 ? 'warn' : '';
+ const { cur: wtCur, max: wtMax, over: wtOver } = checkWeightPenalty(player);
+ const wtCls = wtOver ? 'danger' : wtCur > wtMax * 0.8 ? 'warn' : '';
 
  const barsEl = document.getElementById('mh-bars');
  if (barsEl) {
@@ -938,12 +1085,14 @@ function renderHUD(){
    { l:'知力',   v:player.iq,                         cls:'' },
    { l:'器用',   v:player.dex,                        cls:'' },
    { l:'運',    v:player.lk,                         cls:'' },
+   { l:'食料',   v:`${food}日分`,                     cls:foodCls },
+   { l:'積載',   v:`${wtCur}/${wtMax}`,               cls:wtCls },
   ].map(c => `<div class="mh-cell ${c.cls}"><span class="lbl">${c.l}</span><span class="val">${c.v}</span></div>`).join('');
  }
 }
 
-// ステータス確認パネル（OOON本家 renderStatusPanel() 相当。このダンジョンクローラーが
-// 実際に持っているフィールドだけに絞って構成する：食料・重量・寿命・性格・背景などは未実装）。
+// ステータス確認パネル（OOON本家 renderStatusPanel() 相当。カレンダー等が無いため
+// 誕生日表示や日単位の経過処理は省略し、年齢は固定値、食料はステップ数消費で扱う）。
 function openStatusPanel(){
  if (!player) return;
  renderStatusPanel();
@@ -962,6 +1111,15 @@ function renderStatusPanel(){
  document.getElementById('sp-subtitle').textContent = `${raceLabel} ${typeLabel} Lv${player.level}`;
  document.getElementById('sp-age').textContent = `${player.age}歳`;
  document.getElementById('sp-size').textContent = `身長 ${player.height}cm　体重 ${player.weight}kg`;
+
+ // 寿命（現状ダンジョン内では日付が進まないため、年齢は固定値として扱う）
+ const lifespan = player.lifespan || (AGING_PARAMS[player.race] || AGING_PARAMS.human).lifespan;
+ const lifePct = Math.min(100, player.age / lifespan * 100);
+ const lifeColor = lifePct < 50 ? 'var(--white)' : lifePct < 75 ? '#e0c860' : 'var(--red)';
+ document.getElementById('sp-lifespan-lbl').textContent = `寿命 ${lifespan}歳（余命 ${Math.max(0, lifespan - player.age)}年）`;
+ const lifeBar = document.getElementById('sp-life-bar');
+ lifeBar.style.width = lifePct + '%';
+ lifeBar.style.background = lifeColor;
 
  // 能力値（OOON本家と同じ7項目。STとCONのみ現在値/最大値で表示）
  const attrEl = document.getElementById('sp-attrs');
@@ -982,25 +1140,30 @@ function renderStatusPanel(){
   </div>`;
  }).join('');
 
- // 戦闘値
+ // 戦闘値（積載量は超過するとSPDが半減する。checkWeightPenalty()がplayer.spdへ反映する）
  const adds = calcAdds(player);
  const armor = getArmorValue(player);
+ const { cur: wtCur, max: wtMax, over: wtOver } = checkWeightPenalty(player);
  document.getElementById('sp-combat').innerHTML = [
-  ['戦闘力修正', (adds >= 0 ? '+' : '') + adds],
-  ['防護値', armor + 'hits'],
- ].map(([l, v]) => `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:6px 8px;text-align:center">
+  ['戦闘力修正', (adds >= 0 ? '+' : '') + adds, 'var(--white)'],
+  ['防護値', armor + 'hits', 'var(--white)'],
+  ['積載量', `${wtCur}/${wtMax}wu`, wtOver ? 'var(--red)' : 'var(--white)'],
+ ].map(([l, v, c]) => `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:6px 8px;text-align:center">
    <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:3px">${l}</div>
-   <div style="font-size:var(--font-base);color:var(--white)">${v}</div>
+   <div style="font-size:var(--font-base);color:${c}">${v}</div>
   </div>`).join('');
 
  // 冒険
+ const food = player._food || 0;
+ const foodColor = food > 15 ? 'var(--white)' : food > 5 ? '#e0c860' : food > 0 ? '#e0c860' : 'var(--red)';
  document.getElementById('sp-adv').innerHTML = [
-  ['所持金', player.gold + 'GP'],
-  ['経験値', player.ap],
-  ['LV', player.level],
- ].map(([l, v]) => `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:6px 8px;text-align:center">
+  ['所持金', player.gold + 'GP', 'var(--gold)'],
+  ['経験値', player.ap, 'var(--gold)'],
+  ['LV', player.level, 'var(--gold)'],
+  ['食料', `${food}日分`, foodColor],
+ ].map(([l, v, c]) => `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:6px 8px;text-align:center">
    <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:3px">${l}</div>
-   <div style="font-size:var(--font-base);color:var(--gold)">${v}</div>
+   <div style="font-size:var(--font-base);color:${c}">${v}</div>
   </div>`).join('');
 
  // 装備
@@ -1015,6 +1178,25 @@ function renderStatusPanel(){
    <span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">防具: </span>
    <span style="font-size:var(--font-sm);color:#f0ece0">${armorItem ? armorItem.name : 'なし'}</span>
   </div>`;
+
+ // 性格（善悪・秩序混沌の2軸。現状ダンジョン内に選択肢イベントが無いため常に0=真の中立）
+ const ethics = player.alignment_ethics || 0;
+ const order = player.alignment_order || 0;
+ const alignLabel = getAlignmentLabel(ethics, order);
+ document.getElementById('sp-alignment').innerHTML = `
+  <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;text-align:center">
+   <span style="font-size:var(--font-base);color:#f0ece0">${alignLabel}</span>
+  </div>`;
+
+ // 背景（家系・動機）
+ const bg = player.background || {};
+ document.getElementById('sp-background').innerHTML = (bg.family || bg.motive) ? `
+  <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:10px">
+   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:4px">生い立ち</div>
+   <div style="font-size:var(--font-sm);color:#ece8e0;margin-bottom:8px">${bg.family || ''}</div>
+   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:4px">動機</div>
+   <div style="font-size:var(--font-sm);color:#ece8e0">${bg.motive || ''}</div>
+  </div>` : '';
 
  // 言語
  document.getElementById('sp-languages').textContent = (player.languages || []).join('、');
@@ -1418,6 +1600,34 @@ function getArmorValue(pc){
   return pc.type === 'warrior' ? base * 2 : base;
 }
 
+// ── 積載量（OOON本家 weightPossible/calcTotalWeight/checkWeightPenalty から移植。
+//    衣服による×100ボーナスは対象の装備システムが無いため省略し、常にST×50wuとする）。
+//    現状インベントリの装備品には重量(weight)フィールドが無いためcurは常に0になるが、
+//    今後アイテムにweightを持たせれば自動的にここへ反映される。
+function weightPossible(pc){
+  return (pc.st || 0) * 50;
+}
+
+function calcTotalWeight(pc){
+  let w = 0;
+  (pc.inventory || []).forEach(item => { w += item.weight || 0; });
+  if (pc.equipped) {
+    if (pc.equipped.weapon) w += pc.equipped.weapon.weight || 0;
+    if (pc.equipped.armor) w += pc.equipped.armor.weight || 0;
+  }
+  return w;
+}
+
+// 過積載ならSPDを半減させる（spdBaseに素の値を保持し、そこから毎回計算し直す）。
+function checkWeightPenalty(pc){
+  if (pc.spdBase == null) pc.spdBase = pc.spd;
+  const max = weightPossible(pc);
+  const cur = calcTotalWeight(pc);
+  const over = cur > max;
+  pc.spd = over ? Math.max(1, Math.floor(pc.spdBase / 2)) : pc.spdBase;
+  return { cur, max, over };
+}
+
 // ── モンスター側ロール：MRからダイス数・固定ボーナスを算出 ──
 function monsterRoll(mr){
   const diceCount = Math.floor(mr/10) + 1;
@@ -1451,6 +1661,23 @@ let _dungeonGameOverMessage = null;
 // 罠や特殊タイルの結果を、次のrender()で一度だけ描写に出すためのメッセージバッファ
 let _dungeonMessage = null;
 
+// このステップ数ごとに携行食料を1消費する。尽きていれば代わりに空腹ダメージ(CON-1)を受ける。
+const FOOD_STEP_INTERVAL = 8;
+function tickFoodOnStep(){
+  player._stepsSinceMeal = (player._stepsSinceMeal || 0) + 1;
+  if (player._stepsSinceMeal < FOOD_STEP_INTERVAL) return;
+  player._stepsSinceMeal = 0;
+  if (player._food > 0){
+    player._food -= 1;
+  } else {
+    player.con -= 1;
+    if (player.con <= 0){
+      player.con = 0;
+      _dungeonGameOverMessage = '携行食料が尽き、飢えと渇きの中で力尽きた……';
+    }
+  }
+}
+
 // 座標移動の共通入口。移動後にtrapCellsを確認し、未解決の罠があれば通常のrender()の前に
 // 罠のシーケンス（能力値テスト画面へ遷移）を割り込ませる。
 function moveTo(x, y, facing){
@@ -1458,6 +1685,9 @@ function moveTo(x, y, facing){
   player.y = y;
   if (facing !== undefined) player.facing = facing;
   facingWallFromStraight = false;
+
+  tickFoodOnStep();
+  if (_dungeonGameOverMessage) { render(); return; }
 
   const trap = dungeonData.trapCells[`${x},${y}`];
   if (trap && !trap._resolved && trap.type === 'pit') {
