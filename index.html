@@ -1370,15 +1370,20 @@ function render() {
 
     // 振り返り直後だけは新規にハッシュ選択せず、直前の画像を反転して使い回す
     // （見た目の整合性のため。前進／左右を向く操作をすると通常選択に戻る）
+    // ただし座標固定画像（viewOverrides）はその座標＋向きの組み合わせでしか
+    // 成立しない専用カットなので、向きが変わって対象から外れたら使い回し対象にしない。
+    const overrideKey = `${player.x},${player.y},${player.facing}`;
+    const overrideImage = dungeonData.viewOverrides && dungeonData.viewOverrides[overrideKey];
     let variant;
-    if (imageFlipped && lastCorridorVariant) {
+    if (overrideImage) {
+      imageFlipped = false;
+      variant = { image: overrideImage, index: -1, isOverride: true };
+      lastCorridorVariant = variant;
+    } else if (imageFlipped && lastCorridorVariant && !lastCorridorVariant.isOverride) {
       variant = lastCorridorVariant;
     } else {
-      const overrideKey = `${player.x},${player.y},${player.facing}`;
-      const overrideImage = dungeonData.viewOverrides && dungeonData.viewOverrides[overrideKey];
-      variant = overrideImage
-        ? { image: overrideImage, index: -1 }
-        : pickVariant(dungeonData.floor, player.x, player.y, player.facing, viewType);
+      imageFlipped = false;
+      variant = pickVariant(dungeonData.floor, player.x, player.y, player.facing, viewType);
       lastCorridorVariant = variant;
     }
 
