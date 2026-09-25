@@ -854,7 +854,7 @@ const DUNGEON_FLOORS = {
       "  # #",   // y=8
       "  # #",   // y=9
       "  # #",   // y=10 (元「2」＝門への接近描写)
-      "  # #"    // y=11 (元「+」＝門そのもの)
+      "  ###"    // y=11 (元「+」＝門そのもの。x=3は門で塞がれ、これ以上南へは進めない)
     ],
     // 座標キー "x,y" -> roomId（画像＋テキスト描写＋選択肢を持つ「部屋」ノード）
     roomCells: {
@@ -867,8 +867,12 @@ const DUNGEON_FLOORS = {
     },
     // 通路上の特定タイルに立った時だけ表示するフレーバーテキスト（部屋ノードにはしない簡易描写）。
     tileFlavor: {
-      "3,10": "ダンジョンの入口。古びた巨大な鉄門は固く閉じられている。",
-      "3,11": "ダンジョンの入口、古びた巨大な鉄の重門。ここが、君が転がり込んできた場所だ。今は固く閉ざされている。"
+      "3,10": "ダンジョンの入口。古びた巨大な鉄門は固く閉じられている。"
+    },
+    // 座標＋向きを固定した専用画像（pickVariant()のハッシュ選択より優先される）。
+    // キーは "x,y,facing"（facing: 0=北 1=東 2=南 3=西）。
+    viewOverrides: {
+      "3,10,2": "gate_entrance.webp"
     }
   },
   2: {
@@ -1009,7 +1013,8 @@ const AVAILABLE_IMAGE_FILES = new Set([
   "dead_end_01.webp",
   "dead_end_02.webp",
   "room_ambush.webp",
-  "room_altar.webp"
+  "room_altar.webp",
+  "gate_entrance.webp"
 ]);
 
 // 画像があれば<img>、なければプレースホルダーdivを表示するHTMLを組み立てる共通ヘルパー。
@@ -1369,7 +1374,11 @@ function render() {
     if (imageFlipped && lastCorridorVariant) {
       variant = lastCorridorVariant;
     } else {
-      variant = pickVariant(dungeonData.floor, player.x, player.y, player.facing, viewType);
+      const overrideKey = `${player.x},${player.y},${player.facing}`;
+      const overrideImage = dungeonData.viewOverrides && dungeonData.viewOverrides[overrideKey];
+      variant = overrideImage
+        ? { image: overrideImage, index: -1 }
+        : pickVariant(dungeonData.floor, player.x, player.y, player.facing, viewType);
       lastCorridorVariant = variant;
     }
 
