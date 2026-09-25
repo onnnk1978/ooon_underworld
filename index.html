@@ -349,16 +349,18 @@ body{display:flex;flex-direction:column;align-items:center;
 <div id="description"></div>
 <div id="choices"></div>
 
+<div style="display:flex; align-items:flex-start; gap:12px; width:480px; max-width:94vw;">
 <div id="minimap"></div>
 
-<!-- ダンジョン探索中の能力値テスト（落とし穴など）は画面遷移せず、ここにインライン表示する -->
-<div id="dice-test-inline" class="hidden" style="width:480px;max-width:94vw;margin-top:16px">
- <div class="dice-area">
-  <h3> 能力値テスト</h3>
-  <div id="dd-inline"></div>
-  <div class="dr-result" id="dres-inline">──  ──</div>
-  <button class="roll-btn" id="rl-btn-inline" onclick="doRoll()">▶ ROLL THE DICE!</button>
+<!-- ダンジョン探索中の能力値テスト（落とし穴など）は画面遷移せず、ミニマップの右側にインライン表示する -->
+<div id="dice-test-inline" class="hidden" style="flex:1; min-width:0;">
+ <div class="dice-area" style="padding:12px">
+  <h3 style="font-size:calc(var(--font-sm) + 1px)"> 能力値テスト</h3>
+  <div id="dd-inline" style="font-size:var(--font-base)"></div>
+  <div class="dr-result" id="dres-inline" style="font-size:var(--font-base);min-height:28px">──  ──</div>
+  <button class="roll-btn" id="rl-btn-inline" onclick="doRoll()" style="padding:10px;min-height:auto">▶ ROLL THE DICE!</button>
  </div>
+</div>
 </div>
 </div>
 
