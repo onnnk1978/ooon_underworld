@@ -1346,6 +1346,23 @@ function showSaveSlotUI(mode){
  panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--ink);border:2px solid var(--border);border-radius:6px;padding:16px;z-index:9998;min-width:260px;max-width:90vw;box-shadow:0 0 30px rgba(0,0,0,0.7);font-family:system-ui,sans-serif';
  panel.innerHTML = `<div style="color:#e8e0d8;font-size:calc(var(--font-sm) - 1px);margin-bottom:10px;text-align:center"> ${mode === 'load' ? 'ロード' : 'セーブ'}スロット選択</div>`;
 
+ // 自動セーブ枠（ロード時のみ、一番上に表示）
+ if (mode === 'load') {
+  const asRaw = localStorage.getItem(AUTOSAVE_KEY);
+  if (asRaw) {
+   try {
+    const asData = JSON.parse(asRaw);
+    const dt = new Date(asData.savedAt);
+    const ts = `${dt.getMonth() + 1}/${dt.getDate()} ${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}`;
+    const row = document.createElement('div');
+    row.style.cssText = 'border:1px solid var(--border);border-radius:3px;padding:8px;margin:4px 0;cursor:pointer;background:var(--panel2)';
+    row.innerHTML = `<div style="font-size:calc(var(--font-sm) - 3px);color:var(--dim);margin-bottom:2px">自動セーブ</div><span style="color:#ece8e0">${asData.player.name}</span> <span style="color:var(--dim);font-size:calc(var(--font-sm) - 2px)">［${ts}］</span>`;
+    row.onclick = () => { panel.remove(); loadAutoSave(); };
+    panel.appendChild(row);
+   } catch (e) {}
+  }
+ }
+
  for (let s = 1; s <= SAVE_SLOT_COUNT; s++) {
   const info = getSlotInfo(s);
   const row = document.createElement('div');
@@ -1366,23 +1383,6 @@ function showSaveSlotUI(mode){
    }
   };
   panel.appendChild(row);
- }
-
- // 自動セーブ枠（ロード時のみ表示）
- if (mode === 'load') {
-  const asRaw = localStorage.getItem(AUTOSAVE_KEY);
-  if (asRaw) {
-   try {
-    const asData = JSON.parse(asRaw);
-    const dt = new Date(asData.savedAt);
-    const ts = `${dt.getMonth() + 1}/${dt.getDate()} ${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}`;
-    const row = document.createElement('div');
-    row.style.cssText = 'border:1px solid var(--border);border-radius:3px;padding:8px;margin:4px 0;cursor:pointer;background:var(--panel2)';
-    row.innerHTML = `<div style="font-size:calc(var(--font-sm) - 3px);color:var(--dim);margin-bottom:2px">自動セーブ</div><span style="color:#ece8e0">${asData.player.name}</span> <span style="color:var(--dim);font-size:calc(var(--font-sm) - 2px)">［${ts}］</span>`;
-    row.onclick = () => { panel.remove(); loadAutoSave(); };
-    panel.appendChild(row);
-   } catch (e) {}
-  }
  }
 
  const cancelBtn = document.createElement('button');
