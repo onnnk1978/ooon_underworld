@@ -1622,6 +1622,19 @@ const DUNGEON_FLOORS = {
     interactCells: {
       "15,9": { id: "lever_1", label: "東の壁のレバーを引く", action: "pull_lever_1" }
     },
+    // 曲がり角の実体は「行き止まりの壁」なので、getViewType()が返すcorner_left/corner_right
+    // （通路が右や左に曲がって見える絵）ではなく、素っ気ない壁アップ画像を明示的に割り当てる。
+    // キーは "x,y,facing"（facing: 0=北 1=東 2=南 3=西）。
+    viewOverrides: {
+      "1,9,0": "wall_01.webp",
+      "1,9,2": "wall_03.webp",
+      "1,5,0": "wall_02.webp",
+      "1,5,2": "wall_04.webp",
+      "3,1,1": "wall_02.webp",
+      "3,1,3": "wall_01.webp",
+      "15,9,0": "wall_01.webp",
+      "15,9,2": "wall_01.webp"
+    },
     // (1,9)の落とし格子は開閉状態でテキストが変わるため、静的なtileFlavorではなく関数で持つ。
     dynamicFlavor(x, y) {
       if (x === 1 && y === 9) {
