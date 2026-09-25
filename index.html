@@ -40,6 +40,11 @@ body{display:flex;flex-direction:column;align-items:center;
  align-items:center;justify-content:center;background:var(--screen);
  padding:24px;text-align:center;gap:22px;
 }
+#title-art{
+ width:100%;max-width:280px;aspect-ratio:3/2;object-fit:cover;
+ border:2px solid #4a4030;border-radius:4px;
+ box-shadow:0 0 20px rgba(0,0,0,0.6);
+}
 #title-logo{
  font-family:'Press Start 2P',system-ui,sans-serif;
  color:#f0ece0;font-size:26px;line-height:1.7;
@@ -205,6 +210,7 @@ body{display:flex;flex-direction:column;align-items:center;
 <body>
 
 <div id="title-screen">
+ <img id="title-art" alt="">
  <div id="title-logo">OOON<span class="sub">underworld</span></div>
  <div id="title-tagline">OOONの世界の地下に広がる、語られざる迷宮。<br>Tunnels &amp; Trolls 5th Editionルール準拠の3Dダンジョンクローラー。</div>
  <button class="title-btn" onclick="goToChargen()">はじめる</button>
@@ -1194,6 +1200,14 @@ function renderStatusPanel(){
  // 言語
  document.getElementById('sp-languages').textContent = (player.languages || []).join('、');
 }
+
+// タイトル画面のロゴ上に表示するアートワーク。読み込むたびにランダムで1枚選ぶ。
+const TITLE_ART_IMAGES = ['gate_entrance.webp', 'title_02.webp', 'title_03.webp'];
+(function initTitleArt(){
+ const el = document.getElementById('title-art');
+ if (!el) return;
+ el.src = 'images/' + TITLE_ART_IMAGES[Math.floor(Math.random() * TITLE_ART_IMAGES.length)];
+})();
 
 // 初期表示
 updateRaceInfo();
