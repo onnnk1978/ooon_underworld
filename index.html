@@ -858,8 +858,10 @@ function buildCharacter(){
  // 背景（家系・動機）
  pc.background = rollBackground(race, pc.type);
 
- // 携行食料。ダンジョン内を一定歩数進むごとに1消費される（tickFoodOnStep()参照）。
- pc._food = Nd6(2) + 5;
+ // 携行食料。OOON本家と同様、開始時点では所持していない（PC._food = 0）。
+ // ダンジョン内を一定歩数進むごとに1消費される（tickFoodOnStep()参照）ため、
+ // 道中で見つけた食料で補給しない限りいずれ飢えることになる。
+ pc._food = 0;
  pc._stepsSinceMeal = 0;
 
  return pc;
@@ -1102,6 +1104,29 @@ function closeStatusPanel(){
  document.getElementById('status-overlay').classList.add('hidden');
 }
 
+// player.inventory内のitem（type: 'weapon'|'armor'）をplayer.equipped[type]に装備する。
+// 既に何か装備していればインベントリへ戻す（入れ替え）。ST/DEX要件を満たさない場合は装備しない。
+function equipItem(type, index){
+ const item = player.inventory[index];
+ if (!item || item.type !== type) return;
+ if (!meetsEquipReq(player, item)) return;
+ const prev = player.equipped[type];
+ player.inventory.splice(index, 1);
+ if (prev) player.inventory.push(prev);
+ player.equipped[type] = item;
+ renderStatusPanel();
+ renderHUD();
+}
+
+function unequipItem(type){
+ const item = player.equipped[type];
+ if (!item) return;
+ player.equipped[type] = null;
+ player.inventory.push(item);
+ renderStatusPanel();
+ renderHUD();
+}
+
 function renderStatusPanel(){
  const raceLabel = RACE_LABEL_JP[player.race] || player.race;
  const typeLabel = TYPE_LABEL_JP[player.type] || player.type;
@@ -1165,18 +1190,43 @@ function renderStatusPanel(){
    <div style="font-size:var(--font-base);color:${c}">${v}</div>
   </div>`).join('');
 
- // 装備
+ // 装備（武器・防具はplayer.inventoryから「装備する」、equippedから「外す」で入れ替える。
+ // equipItem()/unequipItem()がクリックハンドラ経由でこの関数を呼び直し再描画する）
  const weapon = player.equipped && player.equipped.weapon;
  const armorItem = player.equipped && player.equipped.armor;
- document.getElementById('sp-equip').innerHTML = `
-  <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;margin-bottom:5px">
-   <span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">武器: </span>
-   <span style="font-size:var(--font-sm);color:#f0ece0">${weapon ? weapon.name : 'なし（素手）'}</span>
-  </div>
-  <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px">
-   <span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">防具: </span>
-   <span style="font-size:var(--font-sm);color:#f0ece0">${armorItem ? armorItem.name : 'なし'}</span>
+ const equippedRow = (label, item, type) => `
+  <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">
+   <div>
+    <span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">${label}: </span>
+    <span style="font-size:var(--font-sm);color:#f0ece0">${item ? item.name : (type === 'weapon' ? 'なし（素手）' : 'なし')}</span>
+    ${item ? `<div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim)">${type === 'weapon' ? `${item.dice}D6+${item.adds}` : `防護${item.hits}`}</div>` : ''}
+   </div>
+   ${item ? `<button onclick="unequipItem('${type}')" style="background:none;border:1px solid var(--border);color:var(--dim);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 8px;cursor:pointer;border-radius:2px">外す</button>` : ''}
   </div>`;
+
+ const invRow = (item, index) => {
+  const ok = meetsEquipReq(player, item);
+  const statLabel = item.type === 'weapon' ? `${item.dice}D6+${item.adds}` : `防護${item.hits}`;
+  const reqLabel = `必要ST${item.stReq}${item.dexReq ? `・DEX${item.dexReq}` : ''}`;
+  return `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">
+   <div>
+    <span style="font-size:var(--font-sm);color:${ok ? '#f0ece0' : 'var(--dim)'}">${item.name}</span>
+    <div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim)">${statLabel}　${reqLabel}</div>
+   </div>
+   <button onclick="equipItem('${item.type}',${index})" ${ok ? '' : 'disabled'} style="background:none;border:1px solid var(--border);color:${ok ? 'var(--dim)' : '#5a5248'};font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 8px;cursor:${ok ? 'pointer' : 'default'};border-radius:2px;opacity:${ok ? '1' : '.5'}">装備する</button>
+  </div>`;
+ };
+
+ const invItemsHtml = (player.inventory || [])
+  .map((item, index) => ({ item, index }))
+  .filter(({ item }) => item.type === 'weapon' || item.type === 'armor')
+  .map(({ item, index }) => invRow(item, index))
+  .join('');
+
+ document.getElementById('sp-equip').innerHTML =
+  equippedRow('武器', weapon, 'weapon') +
+  equippedRow('防具', armorItem, 'armor') +
+  invItemsHtml;
 
  // 性格（善悪・秩序混沌の2軸。現状ダンジョン内に選択肢イベントが無いため常に0=真の中立）
  const ethics = player.alignment_ethics || 0;
@@ -1781,6 +1831,32 @@ const MONSTER_DEFS = {
   ambush_goblins: { name: 'ゴブリンの群れ', mr: 15 },
 };
 
+// ── 武器・防具（OOON本家 WEAPONS_TABLE/ARMOR_TABLE から主要な武具のみ移植。
+//    弓・魔法使い専用杖など、このダンジョンクローラーには無いレンジ攻撃・
+//    呪文システム向けのフィールドは省いている）。
+//    dice: 攻撃ロールで振るD6の個数／adds: 武器固有の固定加算値。
+const WEAPONS_TABLE = [
+  { name: '短剣',           dice: 2, adds: 1, stReq: 1,  dexReq: 4,  cost: 18,  weight: 16,  twoHand: false },
+  { name: '鉈',            dice: 2, adds: 5, stReq: 7,  dexReq: 10, cost: 30,  weight: 25,  twoHand: false },
+  { name: 'ショートソード', dice: 3, adds: 0, stReq: 7,  dexReq: 3,  cost: 35,  weight: 30,  twoHand: false },
+  { name: '棍棒',           dice: 3, adds: 0, stReq: 5,  dexReq: 2,  cost: 15,  weight: 50,  twoHand: false },
+  { name: 'ブロードソード', dice: 3, adds: 4, stReq: 15, dexReq: 10, cost: 70,  weight: 120, twoHand: false },
+  { name: 'シミター',       dice: 4, adds: 0, stReq: 10, dexReq: 11, cost: 60,  weight: 100, twoHand: false },
+  { name: 'ヘビーメイス',   dice: 5, adds: 2, stReq: 17, dexReq: 3,  cost: 120, weight: 200, twoHand: true },
+  { name: 'グレートソード', dice: 6, adds: 0, stReq: 21, dexReq: 18, cost: 120, weight: 170, twoHand: true },
+];
+
+const ARMOR_TABLE = [
+  { name: '布製の鎧',   hits: 3, stReq: 1, cost: 40, weight: 100 },
+  { name: '革製の鎧',   hits: 6, stReq: 2, cost: 50, weight: 200 },
+  { name: 'バックラー', hits: 3, stReq: 1, cost: 10, weight: 75 },
+];
+
+// 装備条件（ST/DEX）を満たしているか
+function meetsEquipReq(pc, item){
+  return pc.st >= (item.stReq || 0) && pc.dex >= (item.dexReq || 0);
+}
+
 // ── 経験値・レベル ──
 // apThresholds[i] = レベル(i+1)に到達するために必要な累積AP
 const AP_THRESHOLDS = [0,1000,3000,7000,15000,25000,45000,70000,100000,140000,200000,280000,400000,550000,750000,1000000,2000000,4000000,8000000,16000000];
@@ -1802,7 +1878,7 @@ function calcAdds(pc){
   return statAdd(pc.st) + statAdd(pc.lk) + statAdd(pc.dex);
 }
 
-// ── 防具点：戦士は2倍（現状は装備システム未実装のため常に0） ──
+// ── 防具点：戦士は2倍 ──
 function getArmorValue(pc){
   const base = (pc.equipped && pc.equipped.armor && pc.equipped.armor.hits) || 0;
   return pc.type === 'warrior' ? base * 2 : base;
@@ -1846,9 +1922,19 @@ function monsterRoll(mr){
 
 // ── プレイヤー側ロール：現状は素手（武器システム未実装）なのでd6+adds ──
 function playerCombatRoll(pc){
-  const adds = calcAdds(pc);
-  const die = d6();
-  return { total: die + adds, die, adds };
+  const weapon = pc.equipped && pc.equipped.weapon;
+  const diceCount = weapon ? weapon.dice : 1;
+  const weaponAdds = weapon ? (weapon.adds || 0) : 0;
+  const statAdds = calcAdds(pc);
+  const diceTotal = Nd6(diceCount);
+  return {
+    total: diceTotal + weaponAdds + statAdds,
+    diceCount,
+    diceTotal,
+    weaponAdds,
+    statAdds,
+    weaponName: weapon ? weapon.name : '素手',
+  };
 }
 
 // 逃走判定: レベル固定(Lv1)のsavingRoll。target = 1*5+15 = 20
@@ -2149,7 +2235,8 @@ function resolveCombatRound(){
   const pRoll = playerCombatRoll(player);
   const eRoll = monsterRoll(m.mr);
 
-  combatState.log.push(`― プレイヤー: ${pRoll.die}+加算${pRoll.adds >= 0 ? '+' : ''}${pRoll.adds} = ${pRoll.total}／${m.name}: ${eRoll.diceCount}D6+${eRoll.flatBonus} = ${eRoll.total}`);
+  const pAddsTotal = pRoll.weaponAdds + pRoll.statAdds;
+  combatState.log.push(`― プレイヤー(${pRoll.weaponName}): ${pRoll.diceCount}D6=${pRoll.diceTotal}+加算${pAddsTotal >= 0 ? '+' : ''}${pAddsTotal} = ${pRoll.total}／${m.name}: ${eRoll.diceCount}D6+${eRoll.flatBonus} = ${eRoll.total}`);
 
   if (pRoll.total > eRoll.total) {
     const dmg = pRoll.total - eRoll.total;
@@ -2181,6 +2268,16 @@ function resolveCombatRound(){
     player.level = newLevel;
     combatState.log.push(`${m.name}を倒した！ AP+${apGain}（累計${player.ap}）`);
     if (leveledUp) combatState.log.push(`レベルが${player.level}に上がった！`);
+
+    // 装備品のドロップ（半々の確率で発生、武器/防具も半々）
+    if (Math.random() < 0.5) {
+      const table = Math.random() < 0.5 ? WEAPONS_TABLE : ARMOR_TABLE;
+      const type = table === WEAPONS_TABLE ? 'weapon' : 'armor';
+      const drop = { ...table[Math.floor(Math.random() * table.length)], type };
+      player.inventory.push(drop);
+      combatState.log.push(`${drop.name}を手に入れた！`);
+    }
+
     rooms[combatState.roomId]._resolved = true;
     combatState.won = true;
   }
