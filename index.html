@@ -301,13 +301,12 @@ body{display:flex;flex-direction:column;align-items:center;
  </div>
 
  <div class="cg-section">
- <h3> 名前と所持金</h3>
+ <h3> 名前</h3>
  <div class="cg-row">
  <label>名前</label>
  <input type="text" id="a-name" value="Mantaro" style="background:var(--ink);border:2px solid var(--border);color:var(--white2);font-family:system-ui,sans-serif;font-size:var(--font-base);padding:7px;border-radius:3px;width:150px">
  <button onclick="document.getElementById('a-name').value=pickNPC()" style="background:none;border:1px solid #444;color:#e0d8c8;font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 6px;cursor:pointer;border-radius:2px;margin-left:6px" title="ランダムな名前">ランダム</button>
  </div>
- <div class="cg-hint" style="margin-top:6px">開始GP: 3D6×10（<button onclick="rollGold()" style="background:none;border:1px solid #444;color:#e0d8c8;font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 6px;cursor:pointer;border-radius:2px">振る</button>）= <span id="gp-result" style="color:#f0ece0">?</span> GP</div>
  </div>
 
  <button class="cg-btn start" onclick="startGame()">▶ 冒険を始める！</button>
@@ -422,7 +421,7 @@ body{display:flex;flex-direction:column;align-items:center;
 //   寿命        : AGING_PARAMS, rollLifespan()
 //   言語習得    : MONSTER_LANGUAGES, rollLanguages()
 //   NPC名候補   : NPC_NAMES, pickNPC()
-//   画面制御    : selectType, toggleStatEdit, rollStats, rollGold, updateAddsPreview,
+//   画面制御    : selectType, toggleStatEdit, rollStats, updateAddsPreview,
 //                 updateRaceInfo
 // startGame() のみ、OOON世界観固有の要素（拠点・混沌・地方伝説・クエスト等）を
 // 全て取り除き、ダンジョンクローラー向けの汎用 buildCharacter() として書き直した。
@@ -591,7 +590,6 @@ function pickNPC(exclude=[]){
 
 // ── 画面制御 ──
 let selectedType = 'warrior';
-let startGold = 0;
 
 function goToChargen(){
  document.getElementById('title-screen').classList.add('hidden');
@@ -629,11 +627,6 @@ function rollStats(){
  document.getElementById(id).value = Nd6(3);
  });
  updateAddsPreview();
-}
-
-function rollGold(){
- startGold = Nd6(3)*10;
- document.getElementById('gp-result').textContent = startGold;
 }
 
 function getBaseStats(){
@@ -708,7 +701,7 @@ function buildCharacter(){
  };
  pc.maxCon = pc.con;
  pc.maxSt = pc.st;
- pc.gold = startGold || Nd6(3)*10;
+ pc.gold = Nd6(3)*10;
  pc.ap = 0;
  pc.level = 1;
 
