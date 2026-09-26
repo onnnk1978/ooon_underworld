@@ -1286,12 +1286,20 @@ function renderStatusPanel(){
  document.getElementById('sp-languages').textContent = (player.languages || []).join('、');
 }
 
+// images/ 配下の画像はファイル名を変えずに中身だけ差し替えることがあるため、
+// URLにバージョン番号を付けてブラウザキャッシュを回避する。画像を差し替えたら
+// このバージョンを上げること（内容自体は何でもよく、変わっていれば新規URL扱いになる）。
+const IMAGE_VERSION = '20260926a';
+function imageUrl(filename){
+  return `images/${filename}?v=${IMAGE_VERSION}`;
+}
+
 // タイトル画面のロゴ上に表示するアートワーク。読み込むたびにランダムで1枚選ぶ。
 const TITLE_ART_IMAGES = ['gate_entrance.webp', 'title_02.webp', 'title_03.webp'];
 (function initTitleArt(){
  const el = document.getElementById('title-art');
  if (!el) return;
- el.src = 'images/' + TITLE_ART_IMAGES[Math.floor(Math.random() * TITLE_ART_IMAGES.length)];
+ el.src = imageUrl(TITLE_ART_IMAGES[Math.floor(Math.random() * TITLE_ART_IMAGES.length)]);
 })();
 
 // ══════════════════════════════════════════════
@@ -1768,7 +1776,7 @@ const AVAILABLE_IMAGE_FILES = new Set([
 function preloadDungeonImages() {
   AVAILABLE_IMAGE_FILES.forEach(filename => {
     const img = new Image();
-    img.src = `images/${filename}`;
+    img.src = imageUrl(filename);
   });
 }
 
@@ -1777,7 +1785,7 @@ function preloadDungeonImages() {
 function imageOrPlaceholder(filename, label, extraStyle) {
   const style = `width:480px;height:320px;object-fit:cover;display:block;${extraStyle || ''}`;
   const placeholder = `[${label}: ${filename} 未検出]`;
-  return `<img src="images/${filename}" alt="${filename}" style="${style}" onerror="this.outerHTML='<div style=&quot;width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;&quot;>${placeholder}</div>'" />`;
+  return `<img src="${imageUrl(filename)}" alt="${filename}" style="${style}" onerror="this.outerHTML='<div style=&quot;width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;&quot;>${placeholder}</div>'" />`;
 }
 
 // ============================================================
