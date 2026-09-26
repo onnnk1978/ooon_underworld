@@ -1644,7 +1644,11 @@ const DUNGEON_FLOORS = {
         action: "event_stairs_up"
       }
     },
-    trapCells: {},
+    // type:'monster'の罠は敵との強制戦闘。倒すと_resolved=trueになり以後は出現しない
+    // （逃走・敗北では解決済みにならず、再訪すればまた遭遇する）。
+    trapCells: {
+      "9,5": { id: "centipede_1", type: "monster", combatId: "giant_centipede" }
+    },
     tileFlavor: {},
     // 落とし格子（ゲート）。閉じている間は壁と同じ扱い（isFloorがfalseを返す）。
     // レバーを引くとopenがtrueになり、その瞬間から通行可能になる。
@@ -1938,6 +1942,7 @@ const MONSTER_DEFS = {
     { name: 'ゴブリン(2)', mr: 5 },
     { name: 'ゴブリン(3)', mr: 5 },
   ] },
+  giant_centipede: { name: '大ムカデ', mr: 10 },
 };
 
 // ── 武器・防具（OOON本家 WEAPONS_TABLE/ARMOR_TABLE から主要な武具のみ移植。
@@ -2089,9 +2094,9 @@ function moveTo(x, y, facing){
   if (_dungeonGameOverMessage) { render(); return; }
 
   const trap = dungeonData.trapCells[`${x},${y}`];
-  if (trap && !trap._resolved && trap.type === 'pit') {
-    triggerPitTrap(trap);
-    return;
+  if (trap && !trap._resolved) {
+    if (trap.type === 'pit') { triggerPitTrap(trap); return; }
+    if (trap.type === 'monster') { triggerMonsterEncounter(trap); return; }
   }
   render();
 }
@@ -2155,6 +2160,12 @@ function triggerPitTrap(trap){
   }, { inline: true });
 }
 
+// モンスターとの強制戦闘（不意打ち）。倒すとtrap._resolved=trueになり以後は出現しない。
+// 逃走・敗北では解決済みにならないため、再訪すればまた同じ罠が発動する。
+function triggerMonsterEncounter(trap){
+  startCombat(trap.combatId, { onWin: () => { trap._resolved = true; } });
+}
+
 // フロア間の移動（階段など）。dungeonDataの参照を切り替えて指定座標へ配置する。
 // 移動が完了した時点で自動セーブする。
 function enterFloor(floorNum, x, y, facing){
@@ -2211,7 +2222,8 @@ function render() {
 
     // 戦闘イベント（未解決）なら戦闘へ突入、出口は隠す
     if (room.eventType === "combat" && !room._resolved) {
-      startCombat(room.combatId, currentRoomId);
+      const resolveRoom = () => { rooms[currentRoomId]._resolved = true; };
+      startCombat(room.combatId, { onWin: resolveRoom, onFlee: resolveRoom });
       return;
     }
 
@@ -2422,12 +2434,14 @@ function handleAction(action) {
 // ============================================================
 // 戦闘（OOON本家のenemies配列・resolveRound()方式に準拠。複数体同時戦闘に対応）
 // ============================================================
-function startCombat(combatId, roomId) {
+// onWin/onFlee: 勝利／逃走成功時に呼ばれるコールバック（部屋の解決フラグを立てる、罠を
+// 解決済みにする、など呼び出し元ごとに異なる後始末をここで行わせる）。
+function startCombat(combatId, { onWin, onFlee } = {}) {
   const def = MONSTER_DEFS[combatId] || { name: combatId, mr: 10 };
   const enemyDefs = def.enemies || [{ name: def.name, mr: def.mr }];
   const enemies = enemyDefs.map(e => ({ name: e.name, mr: e.mr, curMR: e.mr, armor: e.armor || 0 }));
   combatState = {
-    combatId, roomId,
+    combatId, onWin, onFlee,
     enemies,
     totalMR: enemies.reduce((s, e) => s + e.mr, 0), // AP計算用（OOON本家のcs.totalMR相当）
     log: [`${def.name}が現れた！`],
@@ -2499,7 +2513,7 @@ function resolveCombatRound(){
       cs.log.push(`${drop.name}を手に入れた！`);
     }
 
-    rooms[cs.roomId]._resolved = true;
+    if (cs.onWin) cs.onWin();
     cs.won = true;
   }
 }
@@ -2555,7 +2569,7 @@ function renderCombat() {
     startDiceTest(player, 'spd', (result) => {
       if (result.success) {
         combatState.log.push('逃走成功！');
-        rooms[combatState.roomId]._resolved = true;
+        if (combatState.onFlee) combatState.onFlee();
         combatState = null;
       } else {
         combatState.log.push('逃走失敗……');
