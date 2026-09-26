@@ -404,14 +404,14 @@ body{display:flex;flex-direction:column;align-items:center;
    <div id="sp-subtitle" style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)"></div>
   </div>
 
-  <!-- 年齢・身長体重・寿命 -->
+  <!-- 年齢・身長体重（寿命は内部で保持するのみでプレイヤーには非表示） -->
   <div style="margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--earth)">
    <div style="display:flex;justify-content:space-between">
     <span style="font-size:calc(var(--font-sm) + 1px);color:#ece8e0" id="sp-age"></span>
     <span style="font-size:var(--font-sm);color:var(--dim)" id="sp-size"></span>
    </div>
-   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-top:4px" id="sp-lifespan-lbl"></div>
-   <div style="background:#050505;border-radius:3px;height:5px;margin-top:3px;overflow:hidden">
+   <div style="display:none" id="sp-lifespan-lbl"></div>
+   <div style="display:none">
     <div id="sp-life-bar" style="height:100%;width:0%"></div>
    </div>
   </div>
@@ -1230,14 +1230,14 @@ function renderStatusPanel(){
    <div>
     <span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">${label}: </span>
     <span style="font-size:var(--font-sm);color:#f0ece0">${item ? item.name : (type === 'weapon' ? 'なし（素手）' : 'なし')}</span>
-    ${item ? `<div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim)">${type === 'weapon' ? `${item.dice}D6+${item.adds}` : `防護${item.hits}`}</div>` : ''}
+    ${item ? `<div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim)">${type === 'weapon' ? formatWeaponDice(item) : `防護${item.hits}`}</div>` : ''}
    </div>
    ${item ? `<button onclick="unequipItem('${type}')" style="background:none;border:1px solid var(--border);color:var(--dim);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 8px;cursor:pointer;border-radius:2px">外す</button>` : ''}
   </div>`;
 
  const invRow = (item, index) => {
   const ok = meetsEquipReq(player, item);
-  const statLabel = item.type === 'weapon' ? `${item.dice}D6+${item.adds}` : `防護${item.hits}`;
+  const statLabel = item.type === 'weapon' ? formatWeaponDice(item) : `防護${item.hits}`;
   const reqLabel = `必要ST${item.stReq}${item.dexReq ? `・DEX${item.dexReq}` : ''}`;
   return `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">
    <div>
@@ -1945,6 +1945,11 @@ const ARMOR_TABLE = [
 // 装備条件（ST/DEX）を満たしているか
 function meetsEquipReq(pc, item){
   return pc.st >= (item.stReq || 0) && pc.dex >= (item.dexReq || 0);
+}
+
+// 武器の攻撃力表記（例: 2D6+1／2D6-2。addsが負のとき「+-2」にならないようにする）
+function formatWeaponDice(item){
+  return `${item.dice}D6${item.adds >= 0 ? '+' : ''}${item.adds}`;
 }
 
 // ── 経験値・レベル ──
