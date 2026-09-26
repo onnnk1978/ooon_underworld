@@ -895,6 +895,9 @@ function buildCharacter(){
  pc.inventory = [];
  pc.equipped = { weapon: null, armor: null };
 
+ // 魔法使いはOOON本家のLv1呪文のうち戦闘で使えるものを習得済みとして開始する
+ pc.spells = pc.type === 'wizard' ? WIZARD_SPELLS.map(s => ({ ...s })) : [];
+
  pc.age = 15 + Math.floor(Math.random() * 16); // 15〜30歳
  pc.lifespan = rollLifespan(race);
  rollLanguages(pc);
@@ -1998,6 +2001,16 @@ const ARMOR_TABLE = [
   { name: 'バックラー', hits: 3, stReq: 1, cost: 10, weight: 75 },
 ];
 
+// ── 魔法使い専用の戦闘用呪文（OOON本家SPELLS_L1のうち、戦闘中に使えるものだけを移植）。
+//    マジック・ボルト(ttyf): 詠唱レベルを選んで唱える。コストは6×レベル、ダメージは知力値×レベル。
+//    このラウンドの近接攻撃の代わりにこのダメージがそのままヒット合計として扱われる。
+//    鋭き刃(vorpal): コスト5固定。このラウンドは様子を見るだけになるが、次の「戦う」で
+//    武器ダイスの本数が2倍になる。
+const WIZARD_SPELLS = [
+  { name: 'マジック・ボルト', fn: 'ttyf', baseCost: 6, desc: '知力値×詠唱レベルのダメージ' },
+  { name: '鋭き刃', fn: 'vorpal', cost: 5, desc: '次の「戦う」で武器ダイスを2倍にする' },
+];
+
 // 装備条件（ST/DEX）を満たしているか
 function meetsEquipReq(pc, item){
   return pc.st >= (item.stReq || 0) && pc.dex >= (item.dexReq || 0);
@@ -2072,9 +2085,10 @@ function monsterRoll(mr){
 }
 
 // ── プレイヤー側ロール：現状は素手（武器システム未実装）なのでd6+adds ──
-function playerCombatRoll(pc){
+// diceMultiplier: 鋭き刃（vorpal）の効果で武器ダイスの本数を一時的に倍加する場合に指定する
+function playerCombatRoll(pc, diceMultiplier = 1){
   const weapon = pc.equipped && pc.equipped.weapon;
-  const diceCount = weapon ? weapon.dice : 1;
+  const diceCount = (weapon ? weapon.dice : 1) * diceMultiplier;
   const weaponAdds = weapon ? (weapon.adds || 0) : 0;
   const statAdds = calcAdds(pc);
   const diceTotal = Nd6(diceCount);
@@ -2486,6 +2500,8 @@ function startCombat(combatId, { onWin, onFlee } = {}) {
     totalMR: enemies.reduce((s, e) => s + e.mr, 0), // AP計算用（OOON本家のcs.totalMR相当）
     log: [`${def.name}が現れた！`],
     playerDead: false,
+    uiMode: 'action', // 'action' | 'spellSelect' | 'ttyfLevel'
+    vorpalActive: false, // 鋭き刃の効果待ち（次の「戦う」で武器ダイス2倍）
   };
   render();
 }
@@ -2495,17 +2511,29 @@ function startCombat(combatId, { onWin, onFlee } = {}) {
 // 敵側のロールは各体の「現在の残りMR」から算出するため、ダメージを受けた敵は以後のラウンドで
 // 振るダイス数・固定加算も弱くなっていく。プレイヤーが勝った場合、ダメージは生存する敵の頭数で
 // 均等に分配する（余りは先頭の敵へ）。
-function resolveCombatRound(){
+// pcAction: 通常の武器攻撃なら省略。魔法を使った場合は{ label, total, defending }を渡し、
+// その値をそのままプレイヤー側のヒット合計として扱う（OOON本家では詠唱ラウンドは近接攻撃の
+// 代わりに「様子を見る」扱いになり、防具点が2倍になる＝defending:trueに対応）。
+function resolveCombatRound(pcAction){
   const cs = combatState;
-  const pRoll = playerCombatRoll(player);
+  let pRoll, logHeader;
+  if (pcAction) {
+    pRoll = { total: pcAction.total };
+    logHeader = `― プレイヤー(${pcAction.label}): ${pcAction.total}`;
+  } else {
+    const vorpal = !!cs.vorpalActive;
+    cs.vorpalActive = false;
+    pRoll = playerCombatRoll(player, vorpal ? 2 : 1);
+    const pAddsTotal = pRoll.weaponAdds + pRoll.statAdds;
+    logHeader = `― プレイヤー(${pRoll.weaponName}${vorpal ? '・鋭き刃でダイス2倍' : ''}): ${pRoll.diceCount}D6=${pRoll.diceTotal}+加算${pAddsTotal >= 0 ? '+' : ''}${pAddsTotal} = ${pRoll.total}`;
+  }
 
   const aliveEnemies = cs.enemies.filter(e => e.curMR > 0);
   const eRolls = aliveEnemies.map(e => ({ enemy: e, roll: monsterRoll(e.curMR) }));
   const eTotal = eRolls.reduce((s, r) => s + r.roll.total, 0);
 
-  const pAddsTotal = pRoll.weaponAdds + pRoll.statAdds;
   const eDetail = eRolls.map(r => `${r.enemy.name}:${r.roll.diceCount}D6+${r.roll.flatBonus}=${r.roll.total}`).join('／');
-  cs.log.push(`― プレイヤー(${pRoll.weaponName}): ${pRoll.diceCount}D6=${pRoll.diceTotal}+加算${pAddsTotal >= 0 ? '+' : ''}${pAddsTotal} = ${pRoll.total}／${eDetail} → 敵合計${eTotal}`);
+  cs.log.push(`${logHeader}／${eDetail} → 敵合計${eTotal}`);
 
   if (pRoll.total > eTotal) {
     const totalDmg = pRoll.total - eTotal;
@@ -2519,7 +2547,7 @@ function resolveCombatRound(){
     });
   } else if (eTotal > pRoll.total) {
     const rawDmg = eTotal - pRoll.total;
-    const armor = getArmorValue(player);
+    const armor = getArmorValue(player) * (pcAction && pcAction.defending ? 2 : 1);
     const dmg = Math.max(0, rawDmg - armor);
     player.con -= dmg;
     cs.log.push(`敵の反撃！ ${dmg}ダメージを受けた${armor > 0 ? `（防具で${Math.min(rawDmg,armor)}軽減）` : ''}（残りHP ${Math.max(player.con,0)}/${player.maxCon}）`);
@@ -2623,6 +2651,73 @@ function renderCombat() {
     return;
   }
 
+  // 魔法選択画面（呪文の一覧）
+  if (cs.uiMode === 'spellSelect') {
+    (player.spells || []).forEach(sp => {
+      if (sp.fn === 'ttyf') {
+        const ok = player.st >= sp.baseCost;
+        const btn = document.createElement('button');
+        btn.className = 'choice-btn';
+        btn.style.opacity = ok ? '1' : '.5';
+        btn.disabled = !ok;
+        btn.textContent = `${sp.name}（${sp.desc}／強さ-${sp.baseCost}×レベル）`;
+        btn.onclick = () => { cs.uiMode = 'ttyfLevel'; render(); };
+        choices.appendChild(btn);
+      } else if (sp.fn === 'vorpal') {
+        const ok = player.st >= sp.cost;
+        const btn = document.createElement('button');
+        btn.className = 'choice-btn';
+        btn.style.opacity = ok ? '1' : '.5';
+        btn.disabled = !ok;
+        btn.textContent = `${sp.name}（${sp.desc}／強さ-${sp.cost}）`;
+        btn.onclick = () => {
+          player.st -= sp.cost;
+          cs.vorpalActive = true;
+          cs.log.push(`${player.name}は${sp.name}を唱えた！ 次の「戦う」で武器ダイスが2倍になる（強さ-${sp.cost}）`);
+          cs.uiMode = 'action';
+          resolveCombatRound({ label: `${sp.name}を唱えて身構えた`, total: 0, defending: true });
+          render();
+        };
+        choices.appendChild(btn);
+      }
+    });
+    const backBtn = document.createElement('button');
+    backBtn.className = 'choice-btn';
+    backBtn.textContent = '戻る';
+    backBtn.onclick = () => { cs.uiMode = 'action'; render(); };
+    choices.appendChild(backBtn);
+    return;
+  }
+
+  // マジック・ボルトの詠唱レベル選択（コストは6×レベル、ダメージは知力値×レベル）
+  if (cs.uiMode === 'ttyfLevel') {
+    const sp = player.spells.find(s => s.fn === 'ttyf');
+    for (let lv = 1; lv <= player.level; lv++) {
+      const cost = sp.baseCost * lv;
+      const ok = player.st >= cost;
+      const btn = document.createElement('button');
+      btn.className = 'choice-btn';
+      btn.style.opacity = ok ? '1' : '.5';
+      btn.disabled = !ok;
+      btn.textContent = `Lv${lv}（知力${player.iq}×${lv}=${player.iq * lv}ダメージ／強さ-${cost}）`;
+      btn.onclick = () => {
+        player.st -= cost;
+        const dmg = player.iq * lv;
+        cs.log.push(`${player.name}は${sp.name} Lv${lv}を唱えた！（強さ-${cost}）`);
+        cs.uiMode = 'action';
+        resolveCombatRound({ label: `${sp.name} Lv${lv}`, total: dmg, defending: true });
+        render();
+      };
+      choices.appendChild(btn);
+    }
+    const backBtn = document.createElement('button');
+    backBtn.className = 'choice-btn';
+    backBtn.textContent = '戻る';
+    backBtn.onclick = () => { cs.uiMode = 'spellSelect'; render(); };
+    choices.appendChild(backBtn);
+    return;
+  }
+
   const fightBtn = document.createElement('button');
   fightBtn.className = 'choice-btn';
   fightBtn.textContent = '戦う';
@@ -2631,6 +2726,15 @@ function renderCombat() {
     render();
   };
   choices.appendChild(fightBtn);
+
+  // 魔法使いで唱えられる呪文があるときだけ「魔法を使う」を表示する
+  if (player.type === 'wizard' && (player.spells || []).length > 0) {
+    const magicBtn = document.createElement('button');
+    magicBtn.className = 'choice-btn';
+    magicBtn.textContent = '魔法を使う';
+    magicBtn.onclick = () => { cs.uiMode = 'spellSelect'; render(); };
+    choices.appendChild(magicBtn);
+  }
 
   // 逃走判定は他の能力値テスト（罠の回避判定など）と同じ共通のsavingRoll経路（startDiceTest）を
   // 使うが、難易度はOOON本家と同じく常にLv1固定（目標値20固定）にする。出目に応じたAPは他の
