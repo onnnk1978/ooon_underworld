@@ -3397,7 +3397,15 @@ function renderCombat() {
         if (combatState.onFlee) combatState.onFlee();
         combatState = null;
       } else {
-        combatState.log.push('逃走失敗……');
+        // 逃走失敗：目標値に届かなかった分だけ体力にダメージを受ける
+        // （OOON本家準拠。目標値20 − (2D6の出目 + 素早さ) が不足分）。
+        const shortfall = Math.max(0, result.target - (result.roll.total + player.spd));
+        player.con = Math.max(0, player.con - shortfall);
+        combatState.log.push(`逃走失敗……（体力-${shortfall}）`);
+        if (player.con <= 0) {
+          combatState.playerDead = true;
+          combatState.log.push(`${player.name}は倒れた……`);
+        }
       }
       render();
     }, { inline: true, level: 1 });
