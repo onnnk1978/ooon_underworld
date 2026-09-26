@@ -482,7 +482,7 @@ body{display:flex;flex-direction:column;align-items:center;
 // viewType等の表示（#debugInfo）とミニマップ（#minimap）を隠す。それ以外
 // （ローカル開発時のlocalhost、Cloudflare PagesのブランチプレビューURLなど）
 // では常に表示したままにする（.debug-hidden クラスでのCSS非表示、下記CSS参照）。
-const PRODUCTION_HOSTNAME = 'ooon_underworld.pages.dev';
+const PRODUCTION_HOSTNAME = 'ooon-underworld.pages.dev';
 if (location.hostname === PRODUCTION_HOSTNAME) {
   document.documentElement.classList.add('debug-hidden');
 }
