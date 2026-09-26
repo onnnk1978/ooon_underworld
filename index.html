@@ -2096,6 +2096,13 @@ const MONSTER_DEFS = {
     { name: 'ゴブリン(3)', mr: 5 },
   ] },
   giant_centipede: { name: '大ムカデ', mr: 10 },
+  // フロア3のワンダリングモンスター（moveTo()参照）。
+  wander_spider:    { name: '巨大蜘蛛',         mr: 15 },
+  wander_centipede: { name: '巨大ムカデ',       mr: 10 },
+  wander_rat:       { name: '巨大ネズミ',       mr: 12 },
+  wander_larva:     { name: '巨大な幼虫',       mr: 10 },
+  wander_kobold:    { name: '追放されたコボルド', mr: 10 },
+  wander_goblin:    { name: '追放されたゴブリン', mr: 20 },
 };
 
 // ── 武器・防具（OOON本家 WEAPONS_TABLE/ARMOR_TABLE から主要な武具のみ移植。
@@ -2359,6 +2366,9 @@ function moveTo(x, y, facing){
     if (trap.type === 'pit') { triggerPitTrap(trap); return; }
     if (trap.type === 'monster') { triggerMonsterEncounter(trap); return; }
   }
+
+  if (maybeTriggerFloor3Wandering()) return;
+
   render();
 }
 
@@ -2425,6 +2435,48 @@ function triggerPitTrap(trap){
 // 逃走・敗北では解決済みにならないため、再訪すればまた同じ罠が発動する。
 function triggerMonsterEncounter(trap){
   startCombat(trap.combatId, { onWin: () => { trap._resolved = true; } });
+}
+
+// ── フロア3のワンダリングモンスター ──
+// 1マス移動するたびに16%の確率で、以下の6種類からランダムに1体と遭遇する
+// （罠と違って_resolvedを持たないため、何度でも再遭遇しうる）。
+const FLOOR3_WANDERING_ENCOUNTER_CHANCE = 0.16;
+const FLOOR3_WANDERING_MONSTERS = [
+  'wander_spider', 'wander_centipede', 'wander_rat', 'wander_larva', 'wander_kobold', 'wander_goblin'
+];
+
+function _sumDice(n){
+  let t = 0;
+  for (let i = 0; i < n; i++) t += Math.floor(Math.random() * 6) + 1;
+  return t;
+}
+
+// OOON本家 generateTreasure()/rollTreasureCoins() のコイン算出部分
+// （3D6×10×(MR/30)枚、1→CP/2-4→SP/5-6→GPの通貨判定、1GP=10SP=100CP換算）を
+// このゲームのGP単一通貨に置き換え、さらに1/10のスケールにしたもの。
+// 宝石・宝飾品の生成（2D6で2か12の場合のみ）はこのゲームに対応する仕組みが無いため省略している。
+function rollFloor3Treasure(mr){
+  const baseAmt = Math.max(1, Math.floor(_sumDice(3) * 10 * (mr / 30)));
+  const currencyRoll = Math.floor(Math.random() * 6) + 1;
+  const gpPerCoin = currencyRoll === 1 ? 0.01 : currencyRoll <= 4 ? 0.1 : 1;
+  return Math.round(baseAmt * gpPerCoin / 10);
+}
+
+function maybeTriggerFloor3Wandering(){
+  if (dungeonData.floor !== 3) return false;
+  if (Math.random() >= FLOOR3_WANDERING_ENCOUNTER_CHANCE) return false;
+  const combatId = FLOOR3_WANDERING_MONSTERS[Math.floor(Math.random() * FLOOR3_WANDERING_MONSTERS.length)];
+  const mr = MONSTER_DEFS[combatId].mr;
+  startCombat(combatId, {
+    onWin: () => {
+      const gp = rollFloor3Treasure(mr);
+      if (gp > 0) {
+        player.gold += gp;
+        combatState.log.push(`宝物として${gp}GPを手に入れた！`);
+      }
+    }
+  });
+  return true;
 }
 
 // フロア間の移動（階段など）。dungeonDataの参照を切り替えて指定座標へ配置する。
