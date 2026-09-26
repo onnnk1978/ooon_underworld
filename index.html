@@ -952,9 +952,12 @@ function _diceTestEls(inline){
 // actor: 判定を行うキャラ（キャラ作成直後は_pendingPC、ダンジョン探索中はplayer）。
 // 呼び出し側が事前に自分の画面を隠しておく（このダイス画面自体の表示/非表示のみここで管理する）。
 // inline: trueならダンジョン画面を隠さずインラインパネルに表示する（探索中の罠判定などに使用）。
-function startDiceTest(actor, attr, onDone, { inline = false } = {}){
- _diceTestPending = { actor, attr, onDone, inline };
- const target = actor.level * 5 + 15;
+// level: テストの難易度レベルを明示的に固定したい場合に指定する（例：戦闘からの逃走は
+// OOON本家でも常にLv1固定）。省略時は従来通りactor.level（判定者自身の現在レベル）を使う。
+function startDiceTest(actor, attr, onDone, { inline = false, level } = {}){
+ const testLevel = level != null ? level : actor.level;
+ _diceTestPending = { actor, attr, onDone, inline, testLevel };
+ const target = testLevel * 5 + 15;
  const attrVal = actor[attr];
  const attrLabel = ATTR_LABEL_JP[attr] || attr;
  const els = _diceTestEls(inline);
@@ -966,7 +969,7 @@ function startDiceTest(actor, attr, onDone, { inline = false } = {}){
 
  document.getElementById(els.screen).classList.remove('hidden');
  document.getElementById(els.dd).innerHTML =
-  `<span style="color:var(--white)">Lv${actor.level} ${attrLabel}(${attrVal})</span><br>目標: 2D6+${attrVal} ≥ <span style="color:var(--white)">${target}</span>`;
+  `<span style="color:var(--white)">Lv${testLevel} ${attrLabel}(${attrVal})</span><br>目標: 2D6+${attrVal} ≥ <span style="color:var(--white)">${target}</span>`;
  const dres = document.getElementById(els.dres);
  dres.textContent = '──  ──';
  const btn = document.getElementById(els.btn);
@@ -980,7 +983,7 @@ function doRoll(){
  const pending = _diceTestPending;
  if (!pending) return;
  const attrVal = pending.actor[pending.attr];
- const result = savingRoll(attrVal, pending.actor.level);
+ const result = savingRoll(attrVal, pending.testLevel);
  _resolveDiceTest(result);
 }
 
@@ -990,8 +993,9 @@ function _resolveDiceTest(result){
  const attrVal = actor[pending.attr];
  const roll = result.roll;
 
- // 経験点はルール通り出目×レベル（成否問わず加算）
- const apGain = roll.total * actor.level;
+ // 経験点はルール通り出目×テストの難易度レベル（成否問わず加算。OOON本家のsavingRoll()と同じく
+ // 判定者自身の現在レベルではなく、そのテスト自体に設定された難易度レベルを使う）
+ const apGain = roll.total * pending.testLevel;
  actor.ap = (actor.ap || 0) + apGain;
  actor.level = levelFromAP(actor.ap);
 
@@ -1926,9 +1930,14 @@ const diceStr = dice => `[${dice.join(',')}]`;
 // 戦闘システム（ooon_ruleset_export.json 準拠）
 // ============================================================
 
-// ── モンスター定義（MR = Monster Rating。戦闘力とHPを兼ねる単一値） ──
+// ── モンスター定義（MR = Monster Rating。戦闘力とHPを兼ねる単一値）。
+//    単体は{name, mr}、複数体は{name, enemies:[{name, mr}, ...]}で定義する（OOON本家のenemies配列に準拠）。
 const MONSTER_DEFS = {
-  ambush_goblins: { name: 'ゴブリンの群れ', mr: 15 },
+  ambush_goblins: { name: 'ゴブリンの群れ', enemies: [
+    { name: 'ゴブリン(1)', mr: 5 },
+    { name: 'ゴブリン(2)', mr: 5 },
+    { name: 'ゴブリン(3)', mr: 5 },
+  ] },
 };
 
 // ── 武器・防具（OOON本家 WEAPONS_TABLE/ARMOR_TABLE から主要な武具のみ移植。
@@ -2040,16 +2049,6 @@ function playerCombatRoll(pc){
     statAdds,
     weaponName: weapon ? weapon.name : '素手',
   };
-}
-
-// 逃走判定: レベル固定(Lv1)のsavingRoll。target = 1*5+15 = 20
-function attemptFlee(spd) {
-  const roll = explodingDoubles2D6();
-  if (roll.firstTotal < 5) {
-    return { success: false, roll, reason: "自動失敗（初期出目5未満）" };
-  }
-  const success = (roll.total + spd) >= 20;
-  return { success, roll, reason: success ? "成功" : "失敗" };
 }
 
 // ============================================================
@@ -2421,59 +2420,75 @@ function handleAction(action) {
 }
 
 // ============================================================
-// 戦闘（逃走ロジックのみ実装。戦闘本体はスタブ）
+// 戦闘（OOON本家のenemies配列・resolveRound()方式に準拠。複数体同時戦闘に対応）
 // ============================================================
 function startCombat(combatId, roomId) {
   const def = MONSTER_DEFS[combatId] || { name: combatId, mr: 10 };
+  const enemyDefs = def.enemies || [{ name: def.name, mr: def.mr }];
+  const enemies = enemyDefs.map(e => ({ name: e.name, mr: e.mr, curMR: e.mr, armor: e.armor || 0 }));
   combatState = {
     combatId, roomId,
-    monster: { name: def.name, mr: def.mr, hp: def.mr, maxHp: def.mr },
-    log: [`${def.name}が現れた！（MR${def.mr}）`],
+    enemies,
+    totalMR: enemies.reduce((s, e) => s + e.mr, 0), // AP計算用（OOON本家のcs.totalMR相当）
+    log: [`${def.name}が現れた！`],
     playerDead: false,
   };
   render();
 }
 
-// 1ラウンド分の戦闘解決：プレイヤー側ロール vs モンスター側ロールの合計比較、
-// 差分ダメージを負けた側に与える（ooon_ruleset_export.json の combatResolution 準拠）
+// 1ラウンド分の戦闘解決：プレイヤー側ロール合計 vs 生存する敵それぞれのロールの合計を比較し、
+// 差分ダメージを負けた側に与える（OOON本家resolveRound()準拠）。
+// 敵側のロールは各体の「現在の残りMR」から算出するため、ダメージを受けた敵は以後のラウンドで
+// 振るダイス数・固定加算も弱くなっていく。プレイヤーが勝った場合、ダメージは生存する敵の頭数で
+// 均等に分配する（余りは先頭の敵へ）。
 function resolveCombatRound(){
-  const m = combatState.monster;
+  const cs = combatState;
   const pRoll = playerCombatRoll(player);
-  const eRoll = monsterRoll(m.mr);
+
+  const aliveEnemies = cs.enemies.filter(e => e.curMR > 0);
+  const eRolls = aliveEnemies.map(e => ({ enemy: e, roll: monsterRoll(e.curMR) }));
+  const eTotal = eRolls.reduce((s, r) => s + r.roll.total, 0);
 
   const pAddsTotal = pRoll.weaponAdds + pRoll.statAdds;
-  combatState.log.push(`― プレイヤー(${pRoll.weaponName}): ${pRoll.diceCount}D6=${pRoll.diceTotal}+加算${pAddsTotal >= 0 ? '+' : ''}${pAddsTotal} = ${pRoll.total}／${m.name}: ${eRoll.diceCount}D6+${eRoll.flatBonus} = ${eRoll.total}`);
+  const eDetail = eRolls.map(r => `${r.enemy.name}:${r.roll.diceCount}D6+${r.roll.flatBonus}=${r.roll.total}`).join('／');
+  cs.log.push(`― プレイヤー(${pRoll.weaponName}): ${pRoll.diceCount}D6=${pRoll.diceTotal}+加算${pAddsTotal >= 0 ? '+' : ''}${pAddsTotal} = ${pRoll.total}／${eDetail} → 敵合計${eTotal}`);
 
-  if (pRoll.total > eRoll.total) {
-    const dmg = pRoll.total - eRoll.total;
-    m.hp -= dmg;
-    combatState.log.push(`${m.name}に${dmg}ダメージ！（残りHP ${Math.max(m.hp,0)}/${m.maxHp}）`);
-  } else if (eRoll.total > pRoll.total) {
-    const rawDmg = eRoll.total - pRoll.total;
+  if (pRoll.total > eTotal) {
+    const totalDmg = pRoll.total - eTotal;
+    const perEnemy = Math.floor(totalDmg / aliveEnemies.length);
+    const remainder = totalDmg % aliveEnemies.length;
+    aliveEnemies.forEach((e, i) => {
+      const dmgToThis = perEnemy + (i === 0 ? remainder : 0);
+      const actualDmg = Math.max(0, dmgToThis - (e.armor || 0));
+      e.curMR = Math.max(0, e.curMR - actualDmg);
+      cs.log.push(`${e.name}に${actualDmg}ダメージ！（残りMR ${e.curMR}/${e.mr}）`);
+    });
+  } else if (eTotal > pRoll.total) {
+    const rawDmg = eTotal - pRoll.total;
     const armor = getArmorValue(player);
     const dmg = Math.max(0, rawDmg - armor);
     player.con -= dmg;
-    combatState.log.push(`${m.name}の反撃！ ${dmg}ダメージを受けた${armor > 0 ? `（防具で${Math.min(rawDmg,armor)}軽減）` : ''}（残りHP ${Math.max(player.con,0)}/${player.maxCon}）`);
+    cs.log.push(`敵の反撃！ ${dmg}ダメージを受けた${armor > 0 ? `（防具で${Math.min(rawDmg,armor)}軽減）` : ''}（残りHP ${Math.max(player.con,0)}/${player.maxCon}）`);
   } else {
-    combatState.log.push('痛み分け（ダメージなし）');
+    cs.log.push('痛み分け（ダメージなし）');
   }
 
   if (player.con <= 0) {
     player.con = 0;
-    combatState.playerDead = true;
-    combatState.log.push(`${player.name}は倒れた……`);
+    cs.playerDead = true;
+    cs.log.push(`${player.name}は倒れた……`);
     return;
   }
 
-  if (m.hp <= 0) {
+  if (cs.enemies.every(e => e.curMR <= 0)) {
     // 勝利：APを獲得しレベルを再計算、部屋を解決済みにする
-    const apGain = Math.max(1, Math.floor(m.maxHp / 1)); // 生存メンバー数=1（ソロ）
+    const apGain = Math.max(1, cs.totalMR); // 生存メンバー数=1（ソロ）
     player.ap += apGain;
     const newLevel = levelFromAP(player.ap);
     const leveledUp = newLevel > player.level;
     player.level = newLevel;
-    combatState.log.push(`${m.name}を倒した！ AP+${apGain}（累計${player.ap}）`);
-    if (leveledUp) combatState.log.push(`レベルが${player.level}に上がった！`);
+    cs.log.push(`${cs.enemies.map(e => e.name).join('・')}を倒した！ AP+${apGain}（累計${player.ap}）`);
+    if (leveledUp) cs.log.push(`レベルが${player.level}に上がった！`);
 
     // 装備品のドロップ（半々の確率で発生、武器/防具も半々）
     if (Math.random() < 0.5) {
@@ -2481,11 +2496,11 @@ function resolveCombatRound(){
       const type = table === WEAPONS_TABLE ? 'weapon' : 'armor';
       const drop = { ...table[Math.floor(Math.random() * table.length)], type };
       player.inventory.push(drop);
-      combatState.log.push(`${drop.name}を手に入れた！`);
+      cs.log.push(`${drop.name}を手に入れた！`);
     }
 
-    rooms[combatState.roomId]._resolved = true;
-    combatState.won = true;
+    rooms[cs.roomId]._resolved = true;
+    cs.won = true;
   }
 }
 
@@ -2496,15 +2511,17 @@ function renderCombat() {
   const choices = document.getElementById('choices');
   choices.innerHTML = '';
 
-  const m = combatState.monster;
-  viewArea.innerHTML = `<div style="width:480px;height:320px;background:#500;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fdd;gap:8px">
-    <div style="font-size:16px">${m.name}</div>
-    <div style="font-size:12px">HP ${Math.max(m.hp,0)} / ${m.maxHp}</div>
+  const cs = combatState;
+  const enemyRows = cs.enemies.map(e => `
+    <div style="font-size:13px;${e.curMR <= 0 ? 'color:#875;text-decoration:line-through;' : ''}">${e.name}: MR ${Math.max(e.curMR,0)} / ${e.mr}</div>
+  `).join('');
+  viewArea.innerHTML = `<div style="width:480px;height:320px;background:#500;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fdd;gap:4px">
+    ${enemyRows}
   </div>`;
   debugInfo.textContent = '';
-  description.textContent = combatState.log.join('\n');
+  description.textContent = cs.log.join('\n');
 
-  if (combatState.playerDead) {
+  if (cs.playerDead) {
     description.textContent += '\n\n── ゲームオーバー ──';
     const restartBtn = document.createElement('button');
     restartBtn.textContent = '最初からやり直す';
@@ -2513,7 +2530,7 @@ function renderCombat() {
     return;
   }
 
-  if (combatState.won) {
+  if (cs.won) {
     const continueBtn = document.createElement('button');
     continueBtn.textContent = '続ける';
     continueBtn.onclick = () => { combatState = null; render(); };
@@ -2529,16 +2546,22 @@ function renderCombat() {
   };
   choices.appendChild(fightBtn);
 
+  // 逃走判定は他の能力値テスト（罠の回避判定など）と同じ共通のsavingRoll経路（startDiceTest）を
+  // 使うが、難易度はOOON本家と同じく常にLv1固定（目標値20固定）にする。出目に応じたAPは他の
+  // テストと同様に加算される（成否問わず出目×Lv1）。
   const fleeBtn = document.createElement('button');
   fleeBtn.textContent = '逃げる';
   fleeBtn.onclick = () => {
-    const result = attemptFlee(player.spd);
-    combatState.log.push(`逃走判定: 出目合計${result.roll.total} + SPD${player.spd} → ${result.reason}`);
-    if (result.success) {
-      rooms[combatState.roomId]._resolved = true;
-      combatState = null;
-    }
-    render();
+    startDiceTest(player, 'spd', (result) => {
+      if (result.success) {
+        combatState.log.push('逃走成功！');
+        rooms[combatState.roomId]._resolved = true;
+        combatState = null;
+      } else {
+        combatState.log.push('逃走失敗……');
+      }
+      render();
+    }, { inline: true, level: 1 });
   };
   choices.appendChild(fleeBtn);
 }
