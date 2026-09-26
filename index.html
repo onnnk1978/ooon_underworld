@@ -1904,6 +1904,7 @@ const AVAILABLE_IMAGE_FILES = new Set([
   "room_ambush.webp",
   "room_altar.webp",
   "room_exile_gate.webp",
+  "shop_stall.webp",
   "room_stairs_up.webp",
   "room_stairs_down.webp",
   "room_exile_settlement.webp",
@@ -2340,7 +2341,9 @@ function renderShop(){
   description.classList.remove('hidden');
   combatArea.classList.add('hidden');
 
-  viewArea.innerHTML = `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[露店]</div>`;
+  viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('shop_stall.webp')
+    ? imageOrPlaceholder('shop_stall.webp', '露店')
+    : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[露店]</div>`;
   debugInfo.textContent = `所持金: ${player.gold}GP`;
   description.textContent = '雑多な品を並べた露店だ。欲しいものはあるか。不要な武器は売ることもできる。';
 
