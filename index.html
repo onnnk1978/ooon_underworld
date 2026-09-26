@@ -213,6 +213,7 @@ body{display:flex;flex-direction:column;align-items:center;
   #nav-controls .nav-left    { grid-column: 1; grid-row: 2; }
   #nav-controls .nav-examine { grid-column: 2; grid-row: 2; font-size: 30px; }
   #nav-controls .nav-right   { grid-column: 3; grid-row: 2; }
+  #nav-controls .nav-sleep   { grid-column: 1; grid-row: 1; font-size: 30px; }
 
   /* ── ミニHUD（OOON本家 #dt-mini-hud を移植） ── */
   #hud {
@@ -2326,15 +2327,24 @@ function tickInsomnia(){
   }
 }
 
-// 睡眠（居住区の「寝る」から呼ばれる）。6時間眠って初めて不眠ポイントが1点減り、
-// それ以降は3時間ごとに1点ずつ減っていく（3時間睡眠では減らない）。
+// 睡眠。6時間眠って初めて不眠ポイントが1点減り、それ以降は3時間ごとに1点ずつ
+// 減っていく（3時間睡眠では減らない）。あわせて体力も回復する（回復量は場所と
+// 寝具の有無で変わる。6時間あたりの基準値を、選んだ睡眠時間に応じて比例配分する）。
 // 睡眠中の時間経過はtickInsomnia()を経由させない（寝ている間は不眠が進行しないようにするため）が、
 // 食料は眠っている間も消費されるためtickFoodDaily()だけは呼ぶ。
 const SLEEP_OPTIONS_HOURS = [3, 6, 9, 12];
-function sleepFor(hours){
-  GAME_TIME.totalMinutes += hours * 60;
-  tickFoodDaily();
-  if (_dungeonGameOverMessage) { render(); return; }
+const SLEEP_HP_RECOVERY_PER_6H = {
+  settlement: 5,          // 居住地内
+  outsideWithBedding: 3,   // 居住地外・寝具あり
+  outsideNoBedding: 1,     // 居住地外・寝具なし
+};
+
+// 実際に眠り切った（中断されなかった）分の体力回復・不眠ポイント減少・
+// 最終睡眠時刻の更新をまとめて行う。
+function _applySleepBenefits(hours, rate6h){
+  const recovery = Math.round(rate6h * hours / 6);
+  const actualRecovery = Math.min(recovery, player.maxCon - player.con);
+  player.con += actualRecovery;
 
   const reduction = Math.max(0, Math.floor(hours / 3) - 1);
   player._insomniaPoints = Math.max(0, (player._insomniaPoints || 0) - reduction);
@@ -2342,7 +2352,47 @@ function sleepFor(hours){
   player._insomniaAppliedForWake = 0;
   _applyInsomniaPenalty();
 
-  _dungeonMessage = `${hours}時間眠った。`;
+  return actualRecovery;
+}
+
+// 居住地内での睡眠（追放者の居住区の「寝る」から呼ばれる）。中断されることはない。
+function sleepFor(hours){
+  GAME_TIME.totalMinutes += hours * 60;
+  tickFoodDaily();
+  if (_dungeonGameOverMessage) { render(); return; }
+
+  const recovery = _applySleepBenefits(hours, SLEEP_HP_RECOVERY_PER_6H.settlement);
+  _dungeonMessage = `${hours}時間眠った。（体力+${recovery}）`;
+  render();
+}
+
+// 居住地外での睡眠（通路移動中の「眠る」から呼ばれる）。フロア3では1時間経過するごとに
+// 16%の確率でワンダリングモンスターに襲われ、その場合は睡眠時間カウントが0になる
+// （体力回復・不眠ポイント減少とも一切発生せず、そのまま戦闘に突入する）。
+function sleepOutsideFor(hours){
+  const rate6h = hasBedding() ? SLEEP_HP_RECOVERY_PER_6H.outsideWithBedding : SLEEP_HP_RECOVERY_PER_6H.outsideNoBedding;
+  for (let h = 0; h < hours; h++) {
+    GAME_TIME.totalMinutes += 60;
+    tickFoodDaily();
+    if (_dungeonGameOverMessage) { render(); return; }
+
+    if (dungeonData.floor === 3 && Math.random() < FLOOR3_WANDERING_ENCOUNTER_CHANCE) {
+      const combatId = FLOOR3_WANDERING_MONSTERS[Math.floor(Math.random() * FLOOR3_WANDERING_MONSTERS.length)];
+      const mr = MONSTER_DEFS[combatId].mr;
+      startCombat(combatId, {
+        onWin: () => {
+          const gp = rollFloor3Treasure(mr);
+          if (gp > 0) {
+            player.gold += gp;
+            combatState.log.push(`宝物として${gp}GPを手に入れた！`);
+          }
+        }
+      });
+      return;
+    }
+  }
+  const recovery = _applySleepBenefits(hours, rate6h);
+  _dungeonMessage = `${hours}時間眠った。（体力+${recovery}）`;
   render();
 }
 
@@ -2382,8 +2432,16 @@ function handleExileGateChoice(choice){
 const SHOP_ITEMS = [
   { id: 'ration', name: '携行食料', cost: 1, unitLabel: '日分',
     getCount(){ return player._food || 0; },
-    buy(){ player._food = (player._food || 0) + 1; } }
+    buy(){ player._food = (player._food || 0) + 1; } },
+  { id: 'bedding', name: '寝具', cost: 15, unitLabel: '',
+    getCount(){ return (player.inventory || []).filter(i => i.name === '寝具').length; },
+    buy(){ player.inventory.push({ type: 'misc', name: '寝具', weight: 40, desc: '野宿の際に体を休めるための簡易な寝具。使い捨てではなく持ち歩いて何度でも使える。' }); } }
 ];
+
+// 野宿（居住地外での睡眠）時、寝具を持っているかどうかで回復量が変わる。
+function hasBedding(){
+  return (player.inventory || []).some(i => i.name === '寝具');
+}
 
 function openShop(){
   shopState = {};
@@ -2454,9 +2512,10 @@ function renderShop(){
   choices.appendChild(backBtn);
 }
 
-// ── 睡眠時間選択画面（居住区の「寝る」から開く） ──
-function openSleepMenu(){
-  sleepState = {};
+// ── 睡眠時間選択画面（居住区の「寝る」・通路の「眠る」から開く） ──
+// mode: 'settlement'（居住地内・中断なし）または'outside'（居住地外・中断の可能性あり）
+function openSleepMenu(mode){
+  sleepState = { mode: mode || 'settlement' };
   render();
 }
 function closeSleepMenu(){
@@ -2464,8 +2523,9 @@ function closeSleepMenu(){
   render();
 }
 function chooseSleep(hours){
+  const mode = sleepState ? sleepState.mode : 'settlement';
   sleepState = null;
-  sleepFor(hours);
+  if (mode === 'outside') sleepOutsideFor(hours); else sleepFor(hours);
 }
 function renderSleepMenu(){
   const viewArea = document.getElementById('viewArea');
@@ -2482,7 +2542,9 @@ function renderSleepMenu(){
 
   viewArea.innerHTML = `<div style="width:480px;height:320px;background:#223;display:flex;align-items:center;justify-content:center;color:#aaa;">[睡眠]</div>`;
   debugInfo.textContent = '';
-  description.textContent = 'どれくらい眠る？';
+  description.textContent = sleepState.mode === 'outside'
+    ? 'どれくらい眠る？（野宿は何かに襲われて目を覚ますかもしれない）'
+    : 'どれくらい眠る？';
 
   SLEEP_OPTIONS_HOURS.forEach(hours => {
     const btn = document.createElement('button');
@@ -2923,6 +2985,14 @@ function render() {
     examineBtn.innerHTML = '&#128269;';
     examineBtn.onclick = examineSurroundings;
     navControls.appendChild(examineBtn);
+
+    // 居住地外（通路上）での野宿。空いている左上のマスに配置する。
+    const sleepBtn = document.createElement('button');
+    sleepBtn.className = 'nav-sleep';
+    sleepBtn.title = '眠る（野宿）';
+    sleepBtn.innerHTML = '&#128564;';
+    sleepBtn.onclick = () => openSleepMenu('outside');
+    navControls.appendChild(sleepBtn);
   }
 
   renderMinimap();
@@ -2966,7 +3036,7 @@ function handleAction(action) {
     return;
   }
   if (action === 'exile_sleep') {
-    openSleepMenu();
+    openSleepMenu('settlement');
     return;
   }
   alert(`アクション実行: ${action}\n（本来はゲーム内イベント処理を呼び出す）`);
