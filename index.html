@@ -1755,7 +1755,9 @@ const DUNGEON_FLOORS = {
       "# #", // y=18 (部屋A)
       "###"  // y=19
     ],
-    roomCells: {},
+    roomCells: {
+      "12,12": "room_exile_gate"
+    },
     // 階段の踊り場は部屋「1」の位置（西側のみ開口・行き止まり）。
     stairsLinks: {
       "15,12": {
@@ -1798,6 +1800,45 @@ const rooms = {
     combatId: "ambush_goblins",
     // 例外設定: 見た目は開いていても塞がっている出口
     exitsOverride: { west: false }
+  },
+  // フロア3(12,12)。門番とのやり取り（steps）が未解決の間はそちらを表示し、
+  // 一度最後まで進めて集落に迎え入れられた後（_resolved）は集落（settlement*）の内容を表示する。
+  // _stepは会話の進行状況（_resolvedと違い、セーブ/ロードでは復元されない＝会話途中でセーブすると
+  // 次回ロード時は最初からになる。この程度の頻度・長さの会話なので許容する）。
+  room_exile_gate: {
+    image: "room_exile_gate.webp", // TODO: 実画像に差し替え
+    eventType: "story",
+    _step: 0,
+    steps: [
+      { text: "崩れ落ちそうな木の門が通路を塞いでいる。見るからに不健康そうな汚らしい男が、門の向こうからこちらを見ている。",
+        choices: [
+          { label: "挨拶する", next: 1 },
+          { label: "引き返す", action: "leaveExileGate" }
+        ] },
+      { text: "男は不機嫌そうに「ちょっと待ってろ」と言い、奥に姿を消す。しばらくすると男はやはり同様に不健康そうなドワーフと一緒に戻ってくる。ドワーフは「ここまで来れるなら本当に使えないってわけではなさそうだな」と言い最初の男に門を開けさせる。",
+        choices: [{ label: "次へ", next: 2 }] },
+      { text: "ドワーフは君の横に立ち、門の奥へと歩みを進める。最初の男は門を閉め、木の槍を構えて君の後ろをついてくる。",
+        choices: [{ label: "次へ", next: 3 }] },
+      { text: "ドワーフは君を睨みながらつぶやくように話す。「ここはお前のようにこの流刑地に放り込まれた犯罪者たちの集落だ。このダンジョンで生きるにはこうやって助け合って生きていくほかない。ここにいればお前も食料や寝るところが確保できるぞ。ただしその分このコミュニティに貢献してもらわなきゃならん。」",
+        choices: [{ label: "次へ", next: 4 }] },
+      { text: "「このダンジョンは想像以上深くてな。探索して得たものを集めればなんとかこんな場所でもやっていけるってわけさ。そういうわけで、まずはこの得物をやる。それを使ってこのダンジョンを探索してこい。」ドワーフは君に錆びた鉈と小さなコンパスを渡した。",
+        grant: "grantExileWeapon",
+        choices: [{ label: "次へ", next: 5 }] },
+      { text: "「ひとまず今夜はひと休みしろ。そこに寝床があるだろう。ちょうど先週行方不明になったやつがいてな。そこを使っていいぞ。」ドワーフは広間の一角を指さした。",
+        choices: [{ label: "次へ", next: 6 }] },
+      { text: "ドワーフは君に小さな干し肉を渡す。「食いもんだ。今日はやるが明日からは働かないとやらんぞ。」",
+        grant: "grantExileFood",
+        choices: [{ label: "次へ", next: 7 }] },
+      { text: "ドワーフはそう言って広間の中央にあるボロボロの天幕に入っていった。",
+        choices: [{ label: "居住区にとどまる", action: "enterExileSettlement" }] }
+    ],
+    // 解決済み（居住区に迎え入れられた後）に表示する内容
+    settlementImage: "room_exile_settlement.webp", // TODO: 実画像に差し替え
+    settlementDescription: "追放者たちの居住区。粗末な木造りの小屋がいくつも並び、広間の中央にはボロボロの天幕が張られている。",
+    settlementChoices: [
+      { label: "ショップを利用する", action: "exile_shop" },
+      { label: "寝る", action: "exile_sleep" }
+    ]
   }
 };
 
@@ -2193,6 +2234,36 @@ function tickFoodOnStep(){
   }
 }
 
+// ── フロア3・追放者の居住区（room_exile_gate）関連 ──
+// 会話の各ステップに設定されたgrant（文字列）から実際の関数を呼び出す
+const EXILE_GATE_GRANTS = {
+  grantExileWeapon(){
+    player.inventory.push({ type: 'weapon', name: '錆びた鉈', dice: 2, adds: 1, stReq: 0, dexReq: 0, cost: 0, weight: 25, twoHand: false });
+    player.inventory.push({ type: 'misc', name: '小さなコンパス', desc: '古びた小さなコンパス。方角がわかる。' });
+  },
+  grantExileFood(){
+    player._food = (player._food || 0) + 1;
+  }
+};
+
+// room_exile_gateの会話選択肢クリック時の共通ハンドラ
+function handleExileGateChoice(choice){
+  const room = rooms.room_exile_gate;
+  if (choice.next !== undefined) {
+    room._step = choice.next;
+    const step = room.steps[choice.next];
+    if (step.grant && EXILE_GATE_GRANTS[step.grant]) EXILE_GATE_GRANTS[step.grant]();
+    render();
+    return;
+  }
+  if (choice.action === 'leaveExileGate') {
+    room._step = 0; // 次に来たときはまた最初の声かけから
+    moveTo(11, 12);
+    return;
+  }
+  handleAction(choice.action);
+}
+
 // 座標移動の共通入口。移動後にtrapCellsを確認し、未解決の罠があれば通常のrender()の前に
 // 罠のシーケンス（能力値テスト画面へ遷移）を割り込ませる。
 function moveTo(x, y, facing){
@@ -2334,26 +2405,64 @@ function render() {
 
   if (currentRoomId) {
     const room = rooms[currentRoomId];
-    viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(room.image)
-      ? imageOrPlaceholder(room.image, '部屋画像')
-      : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.image} 未用意]</div>`;
-    debugInfo.textContent = `部屋: ${currentRoomId} / eventType: ${room.eventType}${room._resolved ? "（解決済み）" : ""}`;
-    description.textContent = room.description;
 
-    // 戦闘イベント（未解決）なら戦闘へ突入、出口は隠す
-    if (room.eventType === "combat" && !room._resolved) {
-      const resolveRoom = () => { rooms[currentRoomId]._resolved = true; };
-      startCombat(room.combatId, { onWin: resolveRoom, onFlee: resolveRoom });
-      return;
+    // ステップ会話型（room_exile_gate）：未解決の間は会話ステップを、解決済みなら集落の内容を表示する。
+    if (room.eventType === "story") {
+      if (room._resolved) {
+        viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(room.settlementImage)
+          ? imageOrPlaceholder(room.settlementImage, '部屋画像')
+          : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.settlementImage} 未用意]</div>`;
+        debugInfo.textContent = `部屋: ${currentRoomId}（解決済み）`;
+        if (_dungeonMessage) {
+          description.textContent = _dungeonMessage;
+          _dungeonMessage = null;
+        } else {
+          description.textContent = room.settlementDescription;
+        }
+        (room.settlementChoices || []).forEach(choice => {
+          const btn = document.createElement('button');
+          btn.textContent = choice.label;
+          btn.onclick = () => handleAction(choice.action);
+          choices.appendChild(btn);
+        });
+        // 東西の出口は通常の自動生成にフォールスルーさせる（下のDIRS.forEachへ）
+      } else {
+        const step = room.steps[room._step || 0];
+        viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(room.image)
+          ? imageOrPlaceholder(room.image, '部屋画像')
+          : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.image} 未用意]</div>`;
+        debugInfo.textContent = `部屋: ${currentRoomId} / ステップ${room._step || 0}`;
+        description.textContent = step.text;
+        (step.choices || []).forEach(choice => {
+          const btn = document.createElement('button');
+          btn.textContent = choice.label;
+          btn.onclick = () => handleExileGateChoice(choice);
+          choices.appendChild(btn);
+        });
+        return; // 会話中は出口を出さない
+      }
+    } else {
+      viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(room.image)
+        ? imageOrPlaceholder(room.image, '部屋画像')
+        : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.image} 未用意]</div>`;
+      debugInfo.textContent = `部屋: ${currentRoomId} / eventType: ${room.eventType}${room._resolved ? "（解決済み）" : ""}`;
+      description.textContent = room.description;
+
+      // 戦闘イベント（未解決）なら戦闘へ突入、出口は隠す
+      if (room.eventType === "combat" && !room._resolved) {
+        const resolveRoom = () => { rooms[currentRoomId]._resolved = true; };
+        startCombat(room.combatId, { onWin: resolveRoom, onFlee: resolveRoom });
+        return;
+      }
+
+      // 部屋固有の追加選択肢
+      (room.extraChoices || []).forEach(choice => {
+        const btn = document.createElement('button');
+        btn.textContent = choice.label;
+        btn.onclick = () => handleAction(choice.action);
+        choices.appendChild(btn);
+      });
     }
-
-    // 部屋固有の追加選択肢
-    (room.extraChoices || []).forEach(choice => {
-      const btn = document.createElement('button');
-      btn.textContent = choice.label;
-      btn.onclick = () => handleAction(choice.action);
-      choices.appendChild(btn);
-    });
 
     // 出口の自動生成（exitsOverride があれば優先、なければ隣接タイル判定）
     DIRS.forEach((dir, dirIndex) => {
@@ -2555,6 +2664,21 @@ function handleAction(action) {
     dungeonData.gateCells['0,9'].open = true;
     dungeonData.interactCells['15,9']._resolved = true;
     _dungeonMessage = '東の壁のレバーを引くと、重い音を立てて西の落とし格子が持ち上がった。';
+    render();
+    return;
+  }
+  if (action === 'enterExileSettlement') {
+    rooms.room_exile_gate._resolved = true;
+    render();
+    return;
+  }
+  if (action === 'exile_shop') {
+    _dungeonMessage = 'ショップはまだ準備中のようだ。';
+    render();
+    return;
+  }
+  if (action === 'exile_sleep') {
+    _dungeonMessage = '眠るにはまだ早いようだ。';
     render();
     return;
   }
