@@ -211,12 +211,16 @@ body{display:flex;flex-direction:column;align-items:center;
   #nav-controls button {
     padding: 0; margin: 0; font-size: 36px; line-height: 1;
     display: flex; align-items: center; justify-content: center;
+    background: var(--panel); border: 1px solid var(--border); color: var(--dim);
   }
+  #nav-controls button:hover { background: var(--panel2); }
+  #nav-controls button:active { background: var(--panel2); color: var(--white); }
+  #nav-controls button svg { width: 30px; height: 30px; }
   #nav-controls .nav-forward { grid-column: 2; grid-row: 1; }
   #nav-controls .nav-left    { grid-column: 1; grid-row: 2; }
-  #nav-controls .nav-examine { grid-column: 2; grid-row: 2; font-size: 30px; }
+  #nav-controls .nav-examine { grid-column: 2; grid-row: 2; }
   #nav-controls .nav-right   { grid-column: 3; grid-row: 2; }
-  #nav-controls .nav-sleep   { grid-column: 1; grid-row: 1; font-size: 30px; }
+  #nav-controls .nav-sleep   { grid-column: 1; grid-row: 1; }
 
   /* ── ミニHUD（OOON本家 #dt-mini-hud を移植） ── */
   #hud {
@@ -2066,6 +2070,19 @@ const DIRS = [
   { name:"west",  label:"西", dx:-1, dy:0 }
 ];
 
+// #nav-controls用の単色ラインアイコン（絵文字ではなくSVGで統一し、渋いトーンの配色に馴染ませる）。
+// strokeはcurrentColorなのでボタンのCSS color（既定var(--dim)、押下時var(--white)）をそのまま継承する。
+const NAV_ICON_PATHS = {
+  forward: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+  left:    '<path d="M19 12H5M12 19l-7-7 7-7"/>',
+  right:   '<path d="M5 12h14M12 5l7 7-7 7"/>',
+  examine: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>',
+  sleep:   '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+};
+function navIcon(name){
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${NAV_ICON_PATHS[name]}</svg>`;
+}
+
 // ============================================================
 // タイル判定
 // ============================================================
@@ -3003,7 +3020,7 @@ function render() {
     const forwardBtn = document.createElement('button');
     forwardBtn.className = 'nav-forward';
     forwardBtn.title = '前進';
-    forwardBtn.innerHTML = '&#11014;';
+    forwardBtn.innerHTML = navIcon('forward');
     forwardBtn.onclick = canMoveForward
       ? () => { imageFlipped = false; moveTo(player.x + front.dx, player.y + front.dy); }
       : () => { _dungeonMessage = '前方は壁だ。'; render(); };
@@ -3012,7 +3029,7 @@ function render() {
     const turnLeftBtn = document.createElement('button');
     turnLeftBtn.className = 'nav-left';
     turnLeftBtn.title = '左を向く';
-    turnLeftBtn.innerHTML = '&#11013;';
+    turnLeftBtn.innerHTML = navIcon('left');
     turnLeftBtn.onclick = () => {
       facingWallFromStraight = (viewType === 'straight');
       player.facing = (player.facing + 3) % 4;
@@ -3024,7 +3041,7 @@ function render() {
     const turnRightBtn = document.createElement('button');
     turnRightBtn.className = 'nav-right';
     turnRightBtn.title = '右を向く';
-    turnRightBtn.innerHTML = '&#10145;';
+    turnRightBtn.innerHTML = navIcon('right');
     turnRightBtn.onclick = () => {
       facingWallFromStraight = (viewType === 'straight');
       player.facing = (player.facing + 1) % 4;
@@ -3036,7 +3053,7 @@ function render() {
     const examineBtn = document.createElement('button');
     examineBtn.className = 'nav-examine';
     examineBtn.title = '周囲を調べる';
-    examineBtn.innerHTML = '&#128269;';
+    examineBtn.innerHTML = navIcon('examine');
     examineBtn.onclick = examineSurroundings;
     navControls.appendChild(examineBtn);
 
@@ -3044,7 +3061,7 @@ function render() {
     const sleepBtn = document.createElement('button');
     sleepBtn.className = 'nav-sleep';
     sleepBtn.title = '眠る（野宿）';
-    sleepBtn.innerHTML = '&#128564;';
+    sleepBtn.innerHTML = navIcon('sleep');
     sleepBtn.onclick = () => openSleepMenu('outside');
     navControls.appendChild(sleepBtn);
   }
