@@ -1658,7 +1658,7 @@ const DUNGEON_FLOORS = {
     groundItems: {
       "3,2": {
         label: "太い木の棒が落ちている。",
-        item: { type: 'weapon', name: '太い木の棒', dice: 2, adds: -2, stReq: 0, dexReq: 0, cost: 0, weight: 15, twoHand: false }
+        item: { type: 'weapon', name: '太い木の棒', dice: 2, adds: 0, stReq: 2, dexReq: 1, cost: 10, weight: 20, twoHand: false }
       }
     }
   },
@@ -1829,7 +1829,7 @@ const rooms = {
         choices: [{ label: "次へ", next: 3 }] },
       { text: "ドワーフは君を睨みながらつぶやくように話す。「ここはお前のようにこの流刑地に放り込まれた犯罪者たちの集落だ。このダンジョンで生きるにはこうやって助け合って生きていくほかない。ここにいればお前も食料や寝るところが確保できるぞ。ただしその分このコミュニティに貢献してもらわなきゃならん。」",
         choices: [{ label: "次へ", next: 4 }] },
-      { text: "「このダンジョンは想像以上深くてな。探索して得たものを集めればなんとかこんな場所でもやっていけるってわけさ。そういうわけで、まずはこの得物をやる。それを使ってこのダンジョンを探索してこい。」ドワーフは君に錆びた鉈と小さなコンパスを渡した。",
+      { text: "「このダンジョンは想像以上深くてな。探索して得たものを集めればなんとかこんな場所でもやっていけるってわけさ。そういうわけで、まずはこの得物をやる。それを使ってこのダンジョンを探索してこい。」ドワーフは君に小さな鎌と小さなコンパスを渡した。",
         grant: "grantExileWeapon",
         choices: [{ label: "次へ", next: 5 }] },
       { text: "「ひとまず今夜はひと休みしろ。そこに寝床があるだろう。ちょうど先週行方不明になったやつがいてな。そこを使っていいぞ。」ドワーフは広間の一角を指さした。",
@@ -1844,7 +1844,7 @@ const rooms = {
     settlementImage: "room_exile_settlement.webp", // TODO: 実画像に差し替え
     settlementDescription: "追放者たちの居住区。粗末な木造りの小屋がいくつも並び、広間の中央にはボロボロの天幕が張られている。",
     settlementChoices: [
-      { label: "ショップを利用する", action: "exile_shop" },
+      { label: "露店を利用する", action: "exile_shop" },
       { label: "寝る", action: "exile_sleep" }
     ]
   }
@@ -1938,7 +1938,7 @@ function imageOrPlaceholder(filename, label, extraStyle) {
 // facing: 0=北 1=東 2=南 3=西
 let player = null; // キャラ作成完了後、enterDungeon()で生成されたPCから初期化される
 let combatState = null;
-let shopState = null; // nullなら非表示。{}ならショップ画面を表示中（render()参照）
+let shopState = null; // nullなら非表示。{}なら露店画面を表示中（render()参照）
 
 // 「振り返る」で見た目の整合性を保つための状態。
 // 直前に表示していた廊下画像を記憶しておき、振り返り時はハッシュで新規選択せず、
@@ -2266,7 +2266,7 @@ function tickFoodDaily(){
 // 会話の各ステップに設定されたgrant（文字列）から実際の関数を呼び出す
 const EXILE_GATE_GRANTS = {
   grantExileWeapon(){
-    player.inventory.push({ type: 'weapon', name: '錆びた鉈', dice: 2, adds: 1, stReq: 0, dexReq: 0, cost: 0, weight: 25, twoHand: false });
+    player.inventory.push({ type: 'weapon', name: '小さな鎌', dice: 2, adds: 3, stReq: 1, dexReq: 1, cost: 25, weight: 20, twoHand: false });
     player.inventory.push({ type: 'misc', name: '小さなコンパス', desc: '古びた小さなコンパス。方角がわかる。' });
   },
   grantExileFood(){
@@ -2292,8 +2292,9 @@ function handleExileGateChoice(choice){
   handleAction(choice.action);
 }
 
-// ── ショップ（追放者の居住区などから利用する簡易な購入画面） ──
-// item.buy()がplayer側の状態を実際に変更する処理。costはGP単位。
+// ── 露店（追放者の居住区などから利用する簡易な購入・売却画面） ──
+// item.buy()がplayer側の状態を実際に変更する処理。costはGP単位（購入価格）。
+// 武器の売却は所持品(player.inventory)から行い、costの1/2のGPを受け取る。
 const SHOP_ITEMS = [
   { id: 'ration', name: '携行食料', cost: 1, unitLabel: '日分',
     getCount(){ return player._food || 0; },
@@ -2315,9 +2316,17 @@ function buyShopItem(id){
   item.buy();
   render();
 }
+function sellWeaponItem(index){
+  const item = player.inventory[index];
+  if (!item || item.type !== 'weapon') return;
+  const price = Math.floor((item.cost || 0) / 2);
+  player.gold = (player.gold || 0) + price;
+  player.inventory.splice(index, 1);
+  render();
+}
 
 // 戦闘やダンジョンビューと同じ要素（viewArea/description/choices）を使い回して
-// ショップ画面を描く。renderCombat()と同様、render()から分岐して呼ばれる。
+// 露店画面を描く。renderCombat()と同様、render()から分岐して呼ばれる。
 function renderShop(){
   const viewArea = document.getElementById('viewArea');
   const debugInfo = document.getElementById('debugInfo');
@@ -2331,9 +2340,9 @@ function renderShop(){
   description.classList.remove('hidden');
   combatArea.classList.add('hidden');
 
-  viewArea.innerHTML = `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[ショップ]</div>`;
+  viewArea.innerHTML = `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[露店]</div>`;
   debugInfo.textContent = `所持金: ${player.gold}GP`;
-  description.textContent = '雑多な品を並べた店だ。欲しいものはあるか。';
+  description.textContent = '雑多な品を並べた露店だ。欲しいものはあるか。不要な武器は売ることもできる。';
 
   SHOP_ITEMS.forEach(item => {
     const ok = (player.gold || 0) >= item.cost;
@@ -2341,6 +2350,15 @@ function renderShop(){
     btn.textContent = `${item.name}を買う（${item.cost}GP）　所持:${item.getCount()}${item.unitLabel}`;
     btn.disabled = !ok;
     btn.onclick = () => buyShopItem(item.id);
+    choices.appendChild(btn);
+  });
+
+  (player.inventory || []).forEach((item, index) => {
+    if (item.type !== 'weapon') return;
+    const price = Math.floor((item.cost || 0) / 2);
+    const btn = document.createElement('button');
+    btn.textContent = `${item.name}を売る（${price}GP）`;
+    btn.onclick = () => sellWeaponItem(index);
     choices.appendChild(btn);
   });
 
