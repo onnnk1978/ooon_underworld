@@ -1754,6 +1754,16 @@ const AVAILABLE_IMAGE_FILES = new Set([
   "wall_04.webp"
 ]);
 
+// ダンジョン画像の先読み。表示に使う直前ではなく、キャラ作成中など時間の余裕がある
+// タイミングでバックグラウンドに読み込ませてブラウザキャッシュへ乗せておくことで、
+// 実際に表示するときの読み込み待ちをなくす。表示上は何もしない（Imageを生成するだけ）。
+function preloadDungeonImages() {
+  AVAILABLE_IMAGE_FILES.forEach(filename => {
+    const img = new Image();
+    img.src = `images/${filename}`;
+  });
+}
+
 // 画像があれば<img>、なければプレースホルダーdivを表示するHTMLを組み立てる共通ヘルパー。
 // 実際に読み込みに失敗した場合（ファイル欠落など）もonerrorでプレースホルダーに切り替わる。
 function imageOrPlaceholder(filename, label, extraStyle) {
@@ -2560,6 +2570,9 @@ function renderMinimap() {
 // 初期表示（キャラ作成画面のみ）
 updateRaceInfo();
 updateAddsPreview();
+
+// キャラ作成中の時間を使ってダンジョン画像を先読みしておく
+preloadDungeonImages();
 
 </script>
 </body>
