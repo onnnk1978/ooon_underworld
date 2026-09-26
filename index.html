@@ -887,6 +887,10 @@ function buildCharacter(){
  };
  pc.maxCon = pc.con;
  pc.maxSt = pc.st;
+ // 不眠ペナルティ（10%×不眠ポイント）の算出基準になる、装備や状態異常の影響を受けない
+ // 素の知力・器用さ。強さ・体力はmaxSt/maxConを同じ用途で流用する。
+ pc._baseIq = pc.iq;
+ pc._baseDex = pc.dex;
  pc.gold = 0;
  pc.ap = 0;
  pc.level = 1;
@@ -914,6 +918,13 @@ function buildCharacter(){
  // 道中で見つけた・買った食料で補給しない限りいずれ飢えることになる。
  pc._food = 0;
  pc._lastFoodCheckDay = 0; // 冒険開始日（0日目）はまだチェック済み扱いにしておく
+
+ // 不眠ポイント（プレイヤーには見せない内部カウンタ。tickInsomnia()/sleepFor()参照）。
+ // 最後に眠った時刻から24時間経過するごとに1点、以後3時間ごとに1点ずつ溜まっていく。
+ pc._insomniaPoints = 0;
+ pc._lastSleepMinutes = 0; // 冒険開始時点はまだ眠る必要がない扱いにしておく
+ pc._insomniaAppliedForWake = 0; // 今回の覚醒期間中、既に何点分をポイントへ変換済みか
+ pc._insomniaPenaltyApplied = { st: 0, iq: 0, con: 0, dex: 0 }; // 現在ポイント分としてst/iq/con/dexに反映済みの減少量
 
  return pc;
 }
@@ -1394,6 +1405,17 @@ function _applySaveData(data){
   player._lastFoodCheckDay = currentAbsDay();
  }
 
+ // 不眠ポイント導入より前に作られたセーブデータには関連フィールドが無いため、
+ // ロード時点を「たった今眠ったばかり」として補完する（さかのぼって不眠を溜めない）。
+ if (player._lastSleepMinutes == null) {
+  player._lastSleepMinutes = GAME_TIME.totalMinutes;
+  player._insomniaPoints = 0;
+  player._insomniaAppliedForWake = 0;
+  player._insomniaPenaltyApplied = { st: 0, iq: 0, con: 0, dex: 0 };
+ }
+ if (player._baseIq == null) player._baseIq = player.iq;
+ if (player._baseDex == null) player._baseDex = player.dex;
+
  Object.keys(data.floorsState || {}).forEach(floorNum => {
   const floor = DUNGEON_FLOORS[floorNum];
   if (!floor) return;
@@ -1590,6 +1612,7 @@ function formatGameDateTime(){
 function advanceGameTime(minutes){
  GAME_TIME.totalMinutes += (minutes != null ? minutes : MINUTES_PER_STEP);
  tickFoodDaily();
+ tickInsomnia();
 }
 
 // ============================================================
@@ -1940,6 +1963,7 @@ function imageOrPlaceholder(filename, label, extraStyle) {
 let player = null; // キャラ作成完了後、enterDungeon()で生成されたPCから初期化される
 let combatState = null;
 let shopState = null; // nullなら非表示。{}なら露店画面を表示中（render()参照）
+let sleepState = null; // nullなら非表示。{}なら睡眠時間選択画面を表示中（render()参照）
 
 // 「振り返る」で見た目の整合性を保つための状態。
 // 直前に表示していた廊下画像を記憶しておき、振り返り時はハッシュで新規選択せず、
@@ -2263,6 +2287,65 @@ function tickFoodDaily(){
   }
 }
 
+// ── 不眠ポイント（プレイヤーには見せない内部カウンタ） ──
+// 最後に眠った時刻から24時間経過した時点で1点、以後3時間ごとに1点ずつ溜まっていく
+// （寝ている間はこの蓄積が進まないよう、sleepFor()はtickInsomnia()を経由しない）。
+// 1点につき、強さ・知力・体力・器用さそれぞれの「元々の」値（maxSt/_baseIq/maxCon/_baseDex）の
+// 10%分だけ実際の値を減らす。ポイントが増減するたびに反映済みの減少量との差分だけ増減させる
+// ことで、二重適用や巻き戻し漏れを防ぐ。
+function _insomniaPenaltyFor(baseValue, points){
+  return Math.round((baseValue || 0) * 0.10 * points);
+}
+function _applyInsomniaPenalty(){
+  const points = player._insomniaPoints || 0;
+  const prev = player._insomniaPenaltyApplied || { st: 0, iq: 0, con: 0, dex: 0 };
+  const next = {
+    st:  _insomniaPenaltyFor(player.maxSt,   points),
+    iq:  _insomniaPenaltyFor(player._baseIq, points),
+    con: _insomniaPenaltyFor(player.maxCon,  points),
+    dex: _insomniaPenaltyFor(player._baseDex,points),
+  };
+  player.st  = Math.max(0, player.st  - (next.st  - prev.st));
+  player.iq  = Math.max(0, player.iq  - (next.iq  - prev.iq));
+  player.con = Math.max(0, player.con - (next.con - prev.con));
+  player.dex = Math.max(0, player.dex - (next.dex - prev.dex));
+  player._insomniaPenaltyApplied = next;
+  if (player.con <= 0 && !_dungeonGameOverMessage){
+    _dungeonGameOverMessage = '積み重なった不眠により、意識を失いそのまま還らぬ人となった……';
+  }
+}
+function tickInsomnia(){
+  if (!player) return;
+  const elapsedHours = (GAME_TIME.totalMinutes - (player._lastSleepMinutes || 0)) / 60;
+  const shouldHaveAccumulated = elapsedHours < 24 ? 0 : Math.floor((elapsedHours - 24) / 3) + 1;
+  const delta = shouldHaveAccumulated - (player._insomniaAppliedForWake || 0);
+  if (delta > 0) {
+    player._insomniaPoints = (player._insomniaPoints || 0) + delta;
+    player._insomniaAppliedForWake = shouldHaveAccumulated;
+    _applyInsomniaPenalty();
+  }
+}
+
+// 睡眠（居住区の「寝る」から呼ばれる）。6時間眠って初めて不眠ポイントが1点減り、
+// それ以降は3時間ごとに1点ずつ減っていく（3時間睡眠では減らない）。
+// 睡眠中の時間経過はtickInsomnia()を経由させない（寝ている間は不眠が進行しないようにするため）が、
+// 食料は眠っている間も消費されるためtickFoodDaily()だけは呼ぶ。
+const SLEEP_OPTIONS_HOURS = [3, 6, 9, 12];
+function sleepFor(hours){
+  GAME_TIME.totalMinutes += hours * 60;
+  tickFoodDaily();
+  if (_dungeonGameOverMessage) { render(); return; }
+
+  const reduction = Math.max(0, Math.floor(hours / 3) - 1);
+  player._insomniaPoints = Math.max(0, (player._insomniaPoints || 0) - reduction);
+  player._lastSleepMinutes = GAME_TIME.totalMinutes;
+  player._insomniaAppliedForWake = 0;
+  _applyInsomniaPenalty();
+
+  _dungeonMessage = `${hours}時間眠った。`;
+  render();
+}
+
 // ── フロア3・追放者の居住区（room_exile_gate）関連 ──
 // 会話の各ステップに設定されたgrant（文字列）から実際の関数を呼び出す
 const EXILE_GATE_GRANTS = {
@@ -2368,6 +2451,49 @@ function renderShop(){
   const backBtn = document.createElement('button');
   backBtn.textContent = '出る';
   backBtn.onclick = () => closeShop();
+  choices.appendChild(backBtn);
+}
+
+// ── 睡眠時間選択画面（居住区の「寝る」から開く） ──
+function openSleepMenu(){
+  sleepState = {};
+  render();
+}
+function closeSleepMenu(){
+  sleepState = null;
+  render();
+}
+function chooseSleep(hours){
+  sleepState = null;
+  sleepFor(hours);
+}
+function renderSleepMenu(){
+  const viewArea = document.getElementById('viewArea');
+  const debugInfo = document.getElementById('debugInfo');
+  const description = document.getElementById('description');
+  const combatArea = document.getElementById('combatArea');
+  const choices = document.getElementById('choices');
+  choices.innerHTML = '';
+
+  viewArea.classList.remove('hidden');
+  debugInfo.classList.remove('hidden');
+  description.classList.remove('hidden');
+  combatArea.classList.add('hidden');
+
+  viewArea.innerHTML = `<div style="width:480px;height:320px;background:#223;display:flex;align-items:center;justify-content:center;color:#aaa;">[睡眠]</div>`;
+  debugInfo.textContent = '';
+  description.textContent = 'どれくらい眠る？';
+
+  SLEEP_OPTIONS_HOURS.forEach(hours => {
+    const btn = document.createElement('button');
+    btn.textContent = `${hours}時間眠る`;
+    btn.onclick = () => chooseSleep(hours);
+    choices.appendChild(btn);
+  });
+
+  const backBtn = document.createElement('button');
+  backBtn.textContent = 'やめる';
+  backBtn.onclick = () => closeSleepMenu();
   choices.appendChild(backBtn);
 }
 
@@ -2552,6 +2678,12 @@ function render() {
 
   if (shopState) {
     renderShop();
+    renderMinimap();
+    return;
+  }
+
+  if (sleepState) {
+    renderSleepMenu();
     renderMinimap();
     return;
   }
@@ -2834,8 +2966,7 @@ function handleAction(action) {
     return;
   }
   if (action === 'exile_sleep') {
-    _dungeonMessage = '眠るにはまだ早いようだ。';
-    render();
+    openSleepMenu();
     return;
   }
   alert(`アクション実行: ${action}\n（本来はゲーム内イベント処理を呼び出す）`);
