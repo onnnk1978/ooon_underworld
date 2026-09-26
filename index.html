@@ -2397,12 +2397,14 @@ const SLEEP_HP_RECOVERY_PER_6H = {
   outsideNoBedding: 1,     // 居住地外・寝具なし
 };
 
-// 実際に眠り切った（中断されなかった）分の体力回復・不眠ポイント減少・
-// 最終睡眠時刻の更新をまとめて行う。
+// 実際に眠り切った（中断されなかった）分の体力・強さ回復、不眠ポイント減少・
+// 最終睡眠時刻の更新をまとめて行う。強さは体力と同じ回復量（上限はmaxSt）で回復する。
 function _applySleepBenefits(hours, rate6h){
   const recovery = Math.round(rate6h * hours / 6);
-  const actualRecovery = Math.min(recovery, player.maxCon - player.con);
-  player.con += actualRecovery;
+  const conRecovery = Math.min(recovery, player.maxCon - player.con);
+  const stRecovery = Math.min(recovery, player.maxSt - player.st);
+  player.con += conRecovery;
+  player.st += stRecovery;
 
   const reduction = Math.max(0, Math.floor(hours / 3) - 1);
   player._insomniaPoints = Math.max(0, (player._insomniaPoints || 0) - reduction);
@@ -2410,7 +2412,7 @@ function _applySleepBenefits(hours, rate6h){
   player._insomniaAppliedForWake = 0;
   _applyInsomniaPenalty();
 
-  return actualRecovery;
+  return { conRecovery, stRecovery };
 }
 
 // 居住地内での睡眠（追放者の居住区の「寝る」から呼ばれる）。中断されることはない。
@@ -2419,8 +2421,8 @@ function sleepFor(hours){
   tickFoodDaily();
   if (_dungeonGameOverMessage) { render(); return; }
 
-  const recovery = _applySleepBenefits(hours, SLEEP_HP_RECOVERY_PER_6H.settlement);
-  _dungeonMessage = `${hours}時間眠った。（体力+${recovery}）`;
+  const { conRecovery, stRecovery } = _applySleepBenefits(hours, SLEEP_HP_RECOVERY_PER_6H.settlement);
+  _dungeonMessage = `${hours}時間眠った。（体力+${conRecovery}・強さ+${stRecovery}）`;
   render();
 }
 
@@ -2440,8 +2442,8 @@ function sleepOutsideFor(hours){
       return;
     }
   }
-  const recovery = _applySleepBenefits(hours, rate6h);
-  _dungeonMessage = `${hours}時間眠った。（体力+${recovery}）`;
+  const { conRecovery, stRecovery } = _applySleepBenefits(hours, rate6h);
+  _dungeonMessage = `${hours}時間眠った。（体力+${conRecovery}・強さ+${stRecovery}）`;
   render();
 }
 
