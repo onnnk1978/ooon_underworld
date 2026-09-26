@@ -1381,6 +1381,12 @@ function _applySaveData(data){
  dungeonData = DUNGEON_FLOORS[data.floor];
  if (data.gameTime) GAME_TIME = data.gameTime;
 
+ // 魔法使いの呪文導入より前に作られたセーブデータには player.spells が無いため、
+ // ロード時に補完する（新規キャラ作成時と同じ内容を後付けで習得済みにする）。
+ if (player.type === 'wizard' && !(player.spells && player.spells.length)) {
+  player.spells = WIZARD_SPELLS.map(s => ({ ...s }));
+ }
+
  Object.keys(data.floorsState || {}).forEach(floorNum => {
   const floor = DUNGEON_FLOORS[floorNum];
   if (!floor) return;
