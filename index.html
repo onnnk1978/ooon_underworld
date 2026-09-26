@@ -2569,27 +2569,55 @@ function resolveCombatRound(pcAction){
   }
 
   if (cs.enemies.every(e => e.curMR <= 0)) {
-    // 勝利：APを獲得しレベルを再計算、部屋を解決済みにする
-    const apGain = Math.max(1, cs.totalMR); // 生存メンバー数=1（ソロ）
-    player.ap += apGain;
-    const newLevel = levelFromAP(player.ap);
-    const leveledUp = newLevel > player.level;
-    player.level = newLevel;
-    cs.log.push(`${cs.enemies.map(e => e.name).join('・')}を倒した！ AP+${apGain}（累計${player.ap}）`);
-    if (leveledUp) cs.log.push(`レベルが${player.level}に上がった！`);
-
-    // 装備品のドロップ（半々の確率で発生、武器/防具も半々）
-    if (Math.random() < 0.5) {
-      const table = Math.random() < 0.5 ? WEAPONS_TABLE : ARMOR_TABLE;
-      const type = table === WEAPONS_TABLE ? 'weapon' : 'armor';
-      const drop = { ...table[Math.floor(Math.random() * table.length)], type };
-      player.inventory.push(drop);
-      cs.log.push(`${drop.name}を手に入れた！`);
-    }
-
-    if (cs.onWin) cs.onWin();
-    cs.won = true;
+    _grantCombatVictory();
   }
+}
+
+// 戦闘勝利処理（AP獲得・レベル再計算・装備品ドロップ・onWinコールバック）。
+// 通常のラウンド解決（resolveCombatRound）と、マジック・ボルトの直接ダメージで
+// 敵が即死した場合の両方から呼ばれる共通処理。
+function _grantCombatVictory(){
+  const cs = combatState;
+  const apGain = Math.max(1, cs.totalMR); // 生存メンバー数=1（ソロ）
+  player.ap += apGain;
+  const newLevel = levelFromAP(player.ap);
+  const leveledUp = newLevel > player.level;
+  player.level = newLevel;
+  cs.log.push(`${cs.enemies.map(e => e.name).join('・')}を倒した！ AP+${apGain}（累計${player.ap}）`);
+  if (leveledUp) cs.log.push(`レベルが${player.level}に上がった！`);
+
+  // 装備品のドロップ（半々の確率で発生、武器/防具も半々）
+  if (Math.random() < 0.5) {
+    const table = Math.random() < 0.5 ? WEAPONS_TABLE : ARMOR_TABLE;
+    const type = table === WEAPONS_TABLE ? 'weapon' : 'armor';
+    const drop = { ...table[Math.floor(Math.random() * table.length)], type };
+    player.inventory.push(drop);
+    cs.log.push(`${drop.name}を手に入れた！`);
+  }
+
+  if (cs.onWin) cs.onWin();
+  cs.won = true;
+}
+
+// マジック・ボルト（ttyf）の詠唱：OOON本家 _ttyfApplyHit() 準拠。
+// 選んだ対象1体に知力値×詠唱レベルのダメージを、ラウンド比較に入る前に直接適用する。
+// 対象（あるいは全滅）がその場で倒れた場合は即座に勝利処理へ。生き残っていれば、
+// 詠唱者はそのラウンド近接攻撃をしなかった扱い（様子を見る＝防具2倍）で敵の反撃のみ処理する。
+function castMagicBolt(level, target){
+  const cs = combatState;
+  const sp = player.spells.find(s => s.fn === 'ttyf');
+  const cost = sp.baseCost * level;
+  player.st -= cost;
+  const dmg = player.iq * level;
+  target.curMR = Math.max(0, target.curMR - dmg);
+  cs.log.push(`${player.name}は${sp.name} Lv${level}を唱えた！ ${target.name}に${dmg}ダメージ！（残りMR ${target.curMR}/${target.mr}／強さ-${cost}）`);
+  cs.uiMode = 'action';
+
+  if (cs.enemies.every(e => e.curMR <= 0)) {
+    _grantCombatVictory();
+    return;
+  }
+  resolveCombatRound({ label: `${sp.name}を詠唱して隙が生まれた`, total: 0, defending: true });
 }
 
 // 戦闘UI（OOON本家 #cbt-area 準拠）。敵グラフィックは実装しないため、
@@ -2707,11 +2735,13 @@ function renderCombat() {
       btn.disabled = !ok;
       btn.textContent = `Lv${lv}（知力${player.iq}×${lv}=${player.iq * lv}ダメージ／強さ-${cost}）`;
       btn.onclick = () => {
-        player.st -= cost;
-        const dmg = player.iq * lv;
-        cs.log.push(`${player.name}は${sp.name} Lv${lv}を唱えた！（強さ-${cost}）`);
-        cs.uiMode = 'action';
-        resolveCombatRound({ label: `${sp.name} Lv${lv}`, total: dmg, defending: true });
+        const aliveEnemies = cs.enemies.filter(e => e.curMR > 0);
+        if (aliveEnemies.length === 1) {
+          castMagicBolt(lv, aliveEnemies[0]);
+        } else {
+          cs.pendingTtyfLevel = lv;
+          cs.uiMode = 'ttyfTarget';
+        }
         render();
       };
       choices.appendChild(btn);
@@ -2720,6 +2750,26 @@ function renderCombat() {
     backBtn.className = 'choice-btn';
     backBtn.textContent = '戻る';
     backBtn.onclick = () => { cs.uiMode = 'spellSelect'; render(); };
+    choices.appendChild(backBtn);
+    return;
+  }
+
+  // マジック・ボルトの対象選択（敵が複数生存している場合のみ表示。1体しかいなければ自動選択される）
+  if (cs.uiMode === 'ttyfTarget') {
+    cs.enemies.filter(e => e.curMR > 0).forEach(e => {
+      const btn = document.createElement('button');
+      btn.className = 'choice-btn';
+      btn.textContent = `${e.name}（残りMR ${e.curMR}/${e.mr}）`;
+      btn.onclick = () => {
+        castMagicBolt(cs.pendingTtyfLevel, e);
+        render();
+      };
+      choices.appendChild(btn);
+    });
+    const backBtn = document.createElement('button');
+    backBtn.className = 'choice-btn';
+    backBtn.textContent = '戻る';
+    backBtn.onclick = () => { cs.uiMode = 'ttyfLevel'; render(); };
     choices.appendChild(backBtn);
     return;
   }
