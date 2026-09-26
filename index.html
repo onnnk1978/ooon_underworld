@@ -1313,7 +1313,9 @@ function _captureFloorsState(){
   Object.keys(floor.gateCells || {}).forEach(k => { gateCells[k] = !!floor.gateCells[k].open; });
   const interactCells = {};
   Object.keys(floor.interactCells || {}).forEach(k => { interactCells[k] = !!floor.interactCells[k]._resolved; });
-  floorsState[floorNum] = { trapCells, gateCells, interactCells };
+  const groundItems = {};
+  Object.keys(floor.groundItems || {}).forEach(k => { groundItems[k] = !!floor.groundItems[k]._resolved; });
+  floorsState[floorNum] = { trapCells, gateCells, interactCells, groundItems };
  });
  return floorsState;
 }
@@ -1347,6 +1349,7 @@ function _applySaveData(data){
   Object.keys(st.trapCells || {}).forEach(k => { if (floor.trapCells[k]) floor.trapCells[k]._resolved = st.trapCells[k]; });
   Object.keys(st.gateCells || {}).forEach(k => { if (floor.gateCells[k]) floor.gateCells[k].open = st.gateCells[k]; });
   Object.keys(st.interactCells || {}).forEach(k => { if (floor.interactCells[k]) floor.interactCells[k]._resolved = st.interactCells[k]; });
+  Object.keys(st.groundItems || {}).forEach(k => { if (floor.groundItems[k]) floor.groundItems[k]._resolved = st.groundItems[k]; });
  });
  Object.keys(data.roomsState || {}).forEach(id => { if (rooms[id]) rooms[id]._resolved = data.roomsState[id]; });
 
@@ -1596,7 +1599,15 @@ const DUNGEON_FLOORS = {
     // 「周囲を調べる」で座標ごとに起動するカスタムイベント（examineSurroundings()参照）。
     // text: 発見時に表示するテキスト。gold/item: 発見時に入手するもの（省略可）。
     // once: trueなら一度発見済みになった後は再度調べても何も起こらない（repeatTextがあればそれを表示）。
-    examineCells: {}
+    examineCells: {},
+    // 地面に落ちているアイテム。探索せずとも見えており、「拾う」「放っておく」を選べる。
+    // 拾うとitemがplayer.inventoryに入る（装備するかは別途プレイヤーの操作）。
+    groundItems: {
+      "3,2": {
+        label: "太い木の棒が落ちている。",
+        item: { type: 'weapon', name: '太い木の棒', dice: 2, adds: -2, stReq: 0, dexReq: 0, cost: 0, weight: 15, twoHand: false }
+      }
+    }
   },
   2: {
     floor: 2,
@@ -2292,6 +2303,27 @@ function render() {
     } else {
       const dynText = dungeonData.dynamicFlavor ? dungeonData.dynamicFlavor(player.x, player.y) : null;
       description.textContent = dynText != null ? dynText : (dungeonData.tileFlavor[posKey] || '');
+    }
+
+    // 地面に落ちているアイテム（groundItems）。未解決なら「拾う」「放っておく」を表示する。
+    const groundItem = dungeonData.groundItems && dungeonData.groundItems[posKey];
+    if (groundItem && !groundItem._resolved) {
+      description.textContent = groundItem.label;
+
+      const pickUpBtn = document.createElement('button');
+      pickUpBtn.textContent = '拾う';
+      pickUpBtn.onclick = () => {
+        groundItem._resolved = true;
+        player.inventory.push({ ...groundItem.item });
+        _dungeonMessage = `${groundItem.item.name}を拾った。`;
+        render();
+      };
+      choices.appendChild(pickUpBtn);
+
+      const leaveBtn = document.createElement('button');
+      leaveBtn.textContent = '放っておく';
+      leaveBtn.onclick = render;
+      choices.appendChild(leaveBtn);
     }
 
     // レバーなどの設備（interactCells）。未解決なら操作ボタンを表示する。
