@@ -1183,7 +1183,7 @@ function closeStatusPanel(){
 function equipItem(type, index){
  const item = player.inventory[index];
  if (!item || item.type !== type) return;
- if (!meetsEquipReq(player, item)) return;
+ if (type === 'weapon' ? !canEquipPrimaryWeapon(player, item) : !meetsEquipReq(player, item)) return;
  const prev = player.equipped[type];
  player.inventory.splice(index, 1);
  if (prev) player.inventory.push(prev);
@@ -1197,6 +1197,45 @@ function unequipItem(type){
  if (!item) return;
  player.equipped[type] = null;
  player.inventory.push(item);
+ renderStatusPanel();
+ renderHUD();
+}
+
+// 主武器（player.equipped.weapon）への装備可否。通常はmeetsEquipReq通りだが、
+// 既に2本目の武器を装備中の場合は、両手武器でないこと・両武器のST/DEX要求値の
+// 合計を満たしていることも必要（2本目を装備したまま主武器だけ差し替えても
+// 二刀流の条件が崩れないようにする）。
+function canEquipPrimaryWeapon(pc, item){
+ if (!meetsEquipReq(pc, item)) return false;
+ const w2 = pc.equipped && pc.equipped.weapon2;
+ if (w2) {
+  if (item.twoHand) return false;
+  const totalSt  = (item.stReq  || 0) + (w2.stReq  || 0);
+  const totalDex = (item.dexReq || 0) + (w2.dexReq || 0);
+  if (pc.st < totalSt || pc.dex < totalDex) return false;
+ }
+ return true;
+}
+
+// OOON本家準拠：戦士は、主武器・2本目とも両手武器でなく、かつ両武器のST要求値の合計に
+// 自身のSTが達し、DEX要求値の合計に自身のDEXが達していれば、片手武器を2本同時装備できる。
+function canDualWield(pc, item){
+ const w1 = pc.equipped && pc.equipped.weapon;
+ if (pc.type !== 'warrior') return false;
+ if (!w1 || w1.twoHand || item.twoHand) return false;
+ if (pc.equipped.weapon2) return false;
+ const totalSt  = (w1.stReq  || 0) + (item.stReq  || 0);
+ const totalDex = (w1.dexReq || 0) + (item.dexReq || 0);
+ return pc.st >= totalSt && pc.dex >= totalDex;
+}
+
+// 2本目の武器（片手武器限定）を装備する。主武器（player.equipped.weapon）はそのまま。
+function equipSecondWeapon(index){
+ const item = player.inventory[index];
+ if (!item || item.type !== 'weapon') return;
+ if (!canDualWield(player, item)) return;
+ player.inventory.splice(index, 1);
+ player.equipped.weapon2 = item;
  renderStatusPanel();
  renderHUD();
 }
@@ -1266,28 +1305,39 @@ function renderStatusPanel(){
 
  // 装備（武器・防具はplayer.inventoryから「装備する」、equippedから「外す」で入れ替える。
  // equipItem()/unequipItem()がクリックハンドラ経由でこの関数を呼び直し再描画する）
+ // 戦士は、両武器のST・DEX要求値合計を満たせば片手武器を2本同時装備できる
+ // （equipped.weapon2。canDualWield()/equipSecondWeapon()参照）。
  const weapon = player.equipped && player.equipped.weapon;
+ const weapon2 = player.equipped && player.equipped.weapon2;
  const armorItem = player.equipped && player.equipped.armor;
+ const isWeaponType = (type) => type === 'weapon' || type === 'weapon2';
  const equippedRow = (label, item, type) => `
   <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">
    <div>
     <span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">${label}: </span>
     <span style="font-size:var(--font-sm);color:#f0ece0">${item ? item.name : (type === 'weapon' ? 'なし（素手）' : 'なし')}</span>
-    ${item ? `<div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim)">${type === 'weapon' ? formatWeaponDice(item) : `防護${item.hits}`}</div>` : ''}
+    ${item ? `<div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim)">${isWeaponType(type) ? formatWeaponDice(item) : `防護${item.hits}`}</div>` : ''}
    </div>
    ${item ? `<button onclick="unequipItem('${type}')" style="background:none;border:1px solid var(--border);color:var(--dim);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 8px;cursor:pointer;border-radius:2px">外す</button>` : ''}
   </div>`;
 
  const invRow = (item, index) => {
-  const ok = meetsEquipReq(player, item);
+  const ok = item.type === 'weapon' ? canEquipPrimaryWeapon(player, item) : meetsEquipReq(player, item);
   const statLabel = item.type === 'weapon' ? formatWeaponDice(item) : `防護${item.hits}`;
   const reqLabel = `必要ST${item.stReq}${item.dexReq ? `・DEX${item.dexReq}` : ''}`;
+  const dualOk = item.type === 'weapon' && player.type === 'warrior' && canDualWield(player, item);
+  const dualBtn = (item.type === 'weapon' && player.type === 'warrior' && !weapon2)
+   ? `<button onclick="equipSecondWeapon(${index})" ${dualOk ? '' : 'disabled'} style="background:none;border:1px solid var(--border);color:${dualOk ? 'var(--dim)' : '#5a5248'};font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 8px;cursor:${dualOk ? 'pointer' : 'default'};border-radius:2px;opacity:${dualOk ? '1' : '.5'}">2本目に装備</button>`
+   : '';
   return `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">
    <div>
     <span style="font-size:var(--font-sm);color:${ok ? '#f0ece0' : 'var(--dim)'}">${item.name}</span>
     <div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim)">${statLabel}　${reqLabel}</div>
    </div>
-   <button onclick="equipItem('${item.type}',${index})" ${ok ? '' : 'disabled'} style="background:none;border:1px solid var(--border);color:${ok ? 'var(--dim)' : '#5a5248'};font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 8px;cursor:${ok ? 'pointer' : 'default'};border-radius:2px;opacity:${ok ? '1' : '.5'}">装備する</button>
+   <div style="display:flex;gap:4px">
+    <button onclick="equipItem('${item.type}',${index})" ${ok ? '' : 'disabled'} style="background:none;border:1px solid var(--border);color:${ok ? 'var(--dim)' : '#5a5248'};font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 8px;cursor:${ok ? 'pointer' : 'default'};border-radius:2px;opacity:${ok ? '1' : '.5'}">装備する</button>
+    ${dualBtn}
+   </div>
   </div>`;
  };
 
@@ -1299,6 +1349,7 @@ function renderStatusPanel(){
 
  document.getElementById('sp-equip').innerHTML =
   equippedRow('武器', weapon, 'weapon') +
+  (player.type === 'warrior' ? equippedRow('武器2', weapon2, 'weapon2') : '') +
   equippedRow('防具', armorItem, 'armor') +
   invItemsHtml;
 
@@ -2212,6 +2263,7 @@ function calcTotalWeight(pc){
   (pc.inventory || []).forEach(item => { w += item.weight || 0; });
   if (pc.equipped) {
     if (pc.equipped.weapon) w += pc.equipped.weapon.weight || 0;
+    if (pc.equipped.weapon2) w += pc.equipped.weapon2.weight || 0;
     if (pc.equipped.armor) w += pc.equipped.armor.weight || 0;
   }
   return w;
@@ -2237,19 +2289,28 @@ function monsterRoll(mr){
 
 // ── プレイヤー側ロール：現状は素手（武器システム未実装）なのでd6+adds ──
 // diceMultiplier: 鋭き刃（vorpal）の効果で武器ダイスの本数を一時的に倍加する場合に指定する
+// diceMultiplier（鋭き刃／vorpalの効果）はOOON本家準拠で主武器（weapon）のダイスにのみ掛かる。
+// 戦士が2本目の武器（weapon2）を装備している場合、両武器のダイス数・adds値を合算する
+// （OOON本家のequippedWeapons合算ロールに準拠）。
 function playerCombatRoll(pc, diceMultiplier = 1){
   const weapon = pc.equipped && pc.equipped.weapon;
-  const diceCount = (weapon ? weapon.dice : 1) * diceMultiplier;
+  const weapon2 = pc.equipped && pc.equipped.weapon2;
+  const diceCount = weapon ? weapon.dice * diceMultiplier : (weapon2 ? 0 : 1);
   const weaponAdds = weapon ? (weapon.adds || 0) : 0;
+  const dice2Count = weapon2 ? weapon2.dice : 0;
+  const weapon2Adds = weapon2 ? (weapon2.adds || 0) : 0;
   const statAdds = calcAdds(pc);
-  const diceTotal = Nd6(diceCount);
+  const diceTotal = Nd6(diceCount + dice2Count);
+  const weaponName = weapon
+    ? (weapon2 ? `${weapon.name}・${weapon2.name}` : weapon.name)
+    : (weapon2 ? weapon2.name : '素手');
   return {
-    total: diceTotal + weaponAdds + statAdds,
-    diceCount,
+    total: diceTotal + weaponAdds + weapon2Adds + statAdds,
+    diceCount: diceCount + dice2Count,
     diceTotal,
-    weaponAdds,
+    weaponAdds: weaponAdds + weapon2Adds,
     statAdds,
-    weaponName: weapon ? weapon.name : '素手',
+    weaponName,
   };
 }
 
