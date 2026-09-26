@@ -3017,7 +3017,7 @@ function render() {
       choices.appendChild(interactBtn);
     }
 
-    // 方向操作はテキストボタンではなく、ミニマップ右のアイコンパッド（#nav-controls）に表示する。
+    // 方向操作はテキストボタンではなく、画面下端に固定表示するアイコンパッド（#nav-controls）に表示する。
     const navControls = document.getElementById('nav-controls');
 
     const front = DIRS[player.facing];
@@ -3029,7 +3029,6 @@ function render() {
     forwardBtn.onclick = canMoveForward
       ? () => { imageFlipped = false; moveTo(player.x + front.dx, player.y + front.dy); }
       : () => { _dungeonMessage = '前方は壁だ。'; render(); };
-    navControls.appendChild(forwardBtn);
 
     const turnLeftBtn = document.createElement('button');
     turnLeftBtn.className = 'nav-left';
@@ -3041,7 +3040,6 @@ function render() {
       imageFlipped = false;
       render();
     };
-    navControls.appendChild(turnLeftBtn);
 
     const turnRightBtn = document.createElement('button');
     turnRightBtn.className = 'nav-right';
@@ -3053,22 +3051,22 @@ function render() {
       imageFlipped = false;
       render();
     };
-    navControls.appendChild(turnRightBtn);
 
     const examineBtn = document.createElement('button');
     examineBtn.className = 'nav-examine';
     examineBtn.title = '周囲を調べる';
     examineBtn.innerHTML = navIcon('examine');
     examineBtn.onclick = examineSurroundings;
-    navControls.appendChild(examineBtn);
 
-    // 居住地外（通路上）での野宿。空いている左上のマスに配置する。
+    // 居住地外（通路上）での野宿。
     const sleepBtn = document.createElement('button');
     sleepBtn.className = 'nav-sleep';
     sleepBtn.title = '眠る（野宿）';
     sleepBtn.innerHTML = navIcon('sleep');
     sleepBtn.onclick = () => openSleepMenu('outside');
-    navControls.appendChild(sleepBtn);
+
+    // 表示順：睡眠・左・前進・右・調べる
+    [sleepBtn, turnLeftBtn, forwardBtn, turnRightBtn, examineBtn].forEach(btn => navControls.appendChild(btn));
   }
 
   renderMinimap();
