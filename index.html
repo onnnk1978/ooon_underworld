@@ -199,28 +199,33 @@ body{display:flex;flex-direction:column;align-items:center;
   .room { background:#341; color:#dfa; }
   .player { background:#c33; color:#fff; font-weight:bold; }
 
-  /* ── 通路移動の方向操作（ミニマップ右のアイコンパッド） ── */
+  /* 画面下端に固定表示する#nav-controlsの下に、その分の余白を確保しておく
+     （確保しないと、ミニマップなど下部のコンテンツに操作パッドが重なってしまう）。 */
+  #dungeon-screen { padding-bottom: 100px; }
+
+  /* ── 通路移動の方向操作（画面下端に固定表示） ── */
   #nav-controls {
-    display: grid;
-    grid-template-columns: repeat(3, 88px);
-    grid-template-rows: repeat(2, 88px);
-    gap: 12px;
-    align-content: start;
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    width: 480px;
+    max-width: 94vw;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    z-index: 200;
   }
   #nav-controls:empty { display: none; }
   #nav-controls button {
     padding: 0; margin: 0; font-size: 36px; line-height: 1;
+    width: 70px; height: 70px;
     display: flex; align-items: center; justify-content: center;
     background: var(--panel); border: 1px solid var(--border); color: var(--dim);
   }
   #nav-controls button:hover { background: var(--panel2); }
   #nav-controls button:active { background: var(--panel2); color: var(--white); }
-  #nav-controls button svg { width: 30px; height: 30px; }
-  #nav-controls .nav-forward { grid-column: 2; grid-row: 1; }
-  #nav-controls .nav-left    { grid-column: 1; grid-row: 2; }
-  #nav-controls .nav-examine { grid-column: 2; grid-row: 2; }
-  #nav-controls .nav-right   { grid-column: 3; grid-row: 2; }
-  #nav-controls .nav-sleep   { grid-column: 1; grid-row: 1; }
+  #nav-controls button svg { width: 28px; height: 28px; }
 
   /* ── ミニHUD（OOON本家 #dt-mini-hud を移植） ── */
   #hud {
@@ -405,7 +410,7 @@ body{display:flex;flex-direction:column;align-items:center;
 
 <div id="choices"></div>
 
-<div style="display:flex; align-items:flex-start; gap:12px; width:480px; max-width:94vw;">
+<div id="minimap-row" style="display:flex; align-items:flex-start; gap:12px; width:480px; max-width:94vw;">
 <div id="minimap"></div>
 
 <!-- 通路移動中の方向操作（前進／左右を向く／周囲を調べる）をアイコンボタンで表示する。
@@ -3012,7 +3017,7 @@ function render() {
       choices.appendChild(interactBtn);
     }
 
-    // 方向操作はテキストボタンではなく、ミニマップ右のアイコンパッド（#nav-controls）に表示する。
+    // 方向操作はテキストボタンではなく、画面下端に固定表示するアイコンパッド（#nav-controls）に表示する。
     const navControls = document.getElementById('nav-controls');
 
     const front = DIRS[player.facing];
@@ -3024,7 +3029,6 @@ function render() {
     forwardBtn.onclick = canMoveForward
       ? () => { imageFlipped = false; moveTo(player.x + front.dx, player.y + front.dy); }
       : () => { _dungeonMessage = '前方は壁だ。'; render(); };
-    navControls.appendChild(forwardBtn);
 
     const turnLeftBtn = document.createElement('button');
     turnLeftBtn.className = 'nav-left';
@@ -3036,7 +3040,6 @@ function render() {
       imageFlipped = false;
       render();
     };
-    navControls.appendChild(turnLeftBtn);
 
     const turnRightBtn = document.createElement('button');
     turnRightBtn.className = 'nav-right';
@@ -3048,22 +3051,22 @@ function render() {
       imageFlipped = false;
       render();
     };
-    navControls.appendChild(turnRightBtn);
 
     const examineBtn = document.createElement('button');
     examineBtn.className = 'nav-examine';
     examineBtn.title = '周囲を調べる';
     examineBtn.innerHTML = navIcon('examine');
     examineBtn.onclick = examineSurroundings;
-    navControls.appendChild(examineBtn);
 
-    // 居住地外（通路上）での野宿。空いている左上のマスに配置する。
+    // 居住地外（通路上）での野宿。
     const sleepBtn = document.createElement('button');
     sleepBtn.className = 'nav-sleep';
     sleepBtn.title = '眠る（野宿）';
     sleepBtn.innerHTML = navIcon('sleep');
     sleepBtn.onclick = () => openSleepMenu('outside');
-    navControls.appendChild(sleepBtn);
+
+    // 表示順：睡眠・左・前進・右・調べる
+    [sleepBtn, turnLeftBtn, forwardBtn, turnRightBtn, examineBtn].forEach(btn => navControls.appendChild(btn));
   }
 
   renderMinimap();
