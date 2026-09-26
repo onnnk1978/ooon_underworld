@@ -952,9 +952,12 @@ function _diceTestEls(inline){
 // actor: 判定を行うキャラ（キャラ作成直後は_pendingPC、ダンジョン探索中はplayer）。
 // 呼び出し側が事前に自分の画面を隠しておく（このダイス画面自体の表示/非表示のみここで管理する）。
 // inline: trueならダンジョン画面を隠さずインラインパネルに表示する（探索中の罠判定などに使用）。
-function startDiceTest(actor, attr, onDone, { inline = false } = {}){
- _diceTestPending = { actor, attr, onDone, inline };
- const target = actor.level * 5 + 15;
+// level: テストの難易度レベルを明示的に固定したい場合に指定する（例：戦闘からの逃走は
+// OOON本家でも常にLv1固定）。省略時は従来通りactor.level（判定者自身の現在レベル）を使う。
+function startDiceTest(actor, attr, onDone, { inline = false, level } = {}){
+ const testLevel = level != null ? level : actor.level;
+ _diceTestPending = { actor, attr, onDone, inline, testLevel };
+ const target = testLevel * 5 + 15;
  const attrVal = actor[attr];
  const attrLabel = ATTR_LABEL_JP[attr] || attr;
  const els = _diceTestEls(inline);
@@ -966,7 +969,7 @@ function startDiceTest(actor, attr, onDone, { inline = false } = {}){
 
  document.getElementById(els.screen).classList.remove('hidden');
  document.getElementById(els.dd).innerHTML =
-  `<span style="color:var(--white)">Lv${actor.level} ${attrLabel}(${attrVal})</span><br>目標: 2D6+${attrVal} ≥ <span style="color:var(--white)">${target}</span>`;
+  `<span style="color:var(--white)">Lv${testLevel} ${attrLabel}(${attrVal})</span><br>目標: 2D6+${attrVal} ≥ <span style="color:var(--white)">${target}</span>`;
  const dres = document.getElementById(els.dres);
  dres.textContent = '──  ──';
  const btn = document.getElementById(els.btn);
@@ -980,7 +983,7 @@ function doRoll(){
  const pending = _diceTestPending;
  if (!pending) return;
  const attrVal = pending.actor[pending.attr];
- const result = savingRoll(attrVal, pending.actor.level);
+ const result = savingRoll(attrVal, pending.testLevel);
  _resolveDiceTest(result);
 }
 
@@ -990,8 +993,9 @@ function _resolveDiceTest(result){
  const attrVal = actor[pending.attr];
  const roll = result.roll;
 
- // 経験点はルール通り出目×レベル（成否問わず加算）
- const apGain = roll.total * actor.level;
+ // 経験点はルール通り出目×テストの難易度レベル（成否問わず加算。OOON本家のsavingRoll()と同じく
+ // 判定者自身の現在レベルではなく、そのテスト自体に設定された難易度レベルを使う）
+ const apGain = roll.total * pending.testLevel;
  actor.ap = (actor.ap || 0) + apGain;
  actor.level = levelFromAP(actor.ap);
 
@@ -2543,7 +2547,8 @@ function renderCombat() {
   choices.appendChild(fightBtn);
 
   // 逃走判定は他の能力値テスト（罠の回避判定など）と同じ共通のsavingRoll経路（startDiceTest）を
-  // 使う。OOON本家と同じ「2D6＋素早さ ≥ 目標値」の判定で、出目に応じたAPも他のテストと同様に加算される。
+  // 使うが、難易度はOOON本家と同じく常にLv1固定（目標値20固定）にする。出目に応じたAPは他の
+  // テストと同様に加算される（成否問わず出目×Lv1）。
   const fleeBtn = document.createElement('button');
   fleeBtn.textContent = '逃げる';
   fleeBtn.onclick = () => {
@@ -2556,7 +2561,7 @@ function renderCombat() {
         combatState.log.push('逃走失敗……');
       }
       render();
-    }, { inline: true });
+    }, { inline: true, level: 1 });
   };
   choices.appendChild(fleeBtn);
 }
