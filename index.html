@@ -201,28 +201,21 @@ body{display:flex;flex-direction:column;align-items:center;
   .room { background:#341; color:#dfa; }
   .player { background:#c33; color:#fff; font-weight:bold; }
 
-  /* ── 通路移動の方向操作（ミニマップ右のアイコンパッド） ── */
+  /* ── 通路移動の方向操作（実験：最下段に横一列） ── */
   #nav-controls {
-    display: grid;
-    grid-template-columns: repeat(3, 88px);
-    grid-template-rows: repeat(2, 88px);
-    gap: 12px;
-    align-content: start;
+    display: flex;
+    gap: 10px;
   }
   #nav-controls:empty { display: none; }
   #nav-controls button {
     padding: 0; margin: 0; font-size: 36px; line-height: 1;
+    width: 70px; height: 70px;
     display: flex; align-items: center; justify-content: center;
     background: var(--panel); border: 1px solid var(--border); color: var(--dim);
   }
   #nav-controls button:hover { background: var(--panel2); }
   #nav-controls button:active { background: var(--panel2); color: var(--white); }
-  #nav-controls button svg { width: 30px; height: 30px; }
-  #nav-controls .nav-forward { grid-column: 2; grid-row: 1; }
-  #nav-controls .nav-left    { grid-column: 1; grid-row: 2; }
-  #nav-controls .nav-examine { grid-column: 2; grid-row: 2; }
-  #nav-controls .nav-right   { grid-column: 3; grid-row: 2; }
-  #nav-controls .nav-sleep   { grid-column: 1; grid-row: 1; }
+  #nav-controls button svg { width: 28px; height: 28px; }
 
   /* ── ミニHUD（OOON本家 #dt-mini-hud を移植） ── */
   #hud {
