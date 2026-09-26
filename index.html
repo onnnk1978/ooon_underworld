@@ -1580,7 +1580,9 @@ const DUNGEON_FLOORS = {
     // 座標＋向きを固定した専用画像（pickVariant()のハッシュ選択より優先される）。
     // キーは "x,y,facing"（facing: 0=北 1=東 2=南 3=西）。
     viewOverrides: {
-      "3,10,2": "gate_entrance.webp"
+      "3,10,2": "gate_entrance.webp",
+      "3,10,1": "wall_01.webp",
+      "3,10,3": "wall_02.webp"
     },
     // 「周囲を調べる」で座標ごとに起動するカスタムイベント（examineSurroundings()参照）。
     // text: 発見時に表示するテキスト。gold/item: 発見時に入手するもの（省略可）。
