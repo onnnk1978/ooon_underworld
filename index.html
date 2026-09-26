@@ -170,6 +170,24 @@ body{display:flex;flex-direction:column;align-items:center;
   #choices { width:480px; display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
   button { background:#333; color:#eee; border:1px solid #666; padding:8px 14px; cursor:pointer; font-size:14px; border-radius:4px; }
   button:hover { background:#444; }
+
+  /* ── 戦闘UI（OOON本家 #cbt-area 準拠。敵グラフィックが無い分、ステータスバー主体のUIをそのまま流用） ── */
+  #combatArea { width:480px; max-width:94vw; padding:8px; background:#180c06; border:2px solid #6b3018; border-radius:4px; }
+  #combatArea h3 { color:var(--white); margin-bottom:6px; font-size:var(--font-base); text-align:center; }
+  #cbt-status { display:flex; gap:6px; margin-bottom:6px; }
+  #cbt-ally { flex:1; background:var(--ink); border:1px solid #484848; border-radius:3px; padding:6px; min-width:0; }
+  #cbt-enemy { flex:1; background:#180808; border:1px solid #6a2020; border-radius:3px; padding:6px; min-width:0; }
+  .hp-lbl { margin-bottom:2px; font-size:calc(var(--font-sm) - 1px); color:#c8b8a0; }
+  .hp-bar-wrap { height:9px; background:#1a0e06; border:1px solid #4a2810; border-radius:2px; overflow:hidden; margin-bottom:4px; }
+  .hp-bar-fill { height:100%; transition:width .5s; border-radius:1px; }
+  .hp-bar-fill.player { background:linear-gradient(90deg,#b03828,#c06020); }
+  .hp-bar-fill.enemy { background:linear-gradient(90deg,#b07020,#c09830); }
+  #cbt-log-wrap { min-height:60px; max-height:30vh; display:flex; flex-direction:column; border:1px solid #3a2010; border-radius:3px; background:#100806; }
+  #cbt-log-header { flex-shrink:0; padding:4px 8px; border-bottom:1px solid #3a2010; font-size:calc(var(--font-sm) - 2px); color:#d8d0c0; }
+  .cbt-log { flex:1; min-height:0; max-height:30vh; padding:6px 8px; font-size:var(--font-sm); line-height:2; color:#b8a890; overflow-y:auto; }
+  .choice-btn { background:#140e08; border:2px solid var(--border2); color:#f0ece0; font-family:system-ui,sans-serif; font-size:var(--font-base); padding:15px 13px; cursor:pointer; text-align:left; line-height:1.4; border-radius:4px; min-height:56px; flex:1 1 100%; }
+  .choice-btn:active { background:#1e1608; border-color:#f0ece0; color:var(--white2); }
+  .choice-btn::before { content:'▶ '; color:#f0ece0; }
   #minimap { margin-top:24px; }
   #minimap table { border-collapse: collapse; }
   #minimap td { width:20px; height:20px; text-align:center; font-size:11px; border:1px solid #222; }
@@ -373,6 +391,12 @@ body{display:flex;flex-direction:column;align-items:center;
 <div id="viewArea"></div>
 <div id="debugInfo"></div>
 <div id="description"></div>
+
+<!-- 戦闘UI（OOON本家 #cbt-area 準拠）。敵グラフィックは実装しないため、
+     ステータスバー＋戦闘ログのみで構成する。戦闘中はviewArea/debugInfo/descriptionを隠し、
+     こちらを表示する（render()冒頭で毎回リセットしている） -->
+<div id="combatArea" class="hidden"></div>
+
 <div id="choices"></div>
 
 <div style="display:flex; align-items:flex-start; gap:12px; width:480px; max-width:94vw;">
@@ -2193,9 +2217,17 @@ function render() {
   const viewArea = document.getElementById('viewArea');
   const debugInfo = document.getElementById('debugInfo');
   const description = document.getElementById('description');
+  const combatArea = document.getElementById('combatArea');
   const choices = document.getElementById('choices');
   choices.innerHTML = '';
   document.getElementById('nav-controls').innerHTML = '';
+
+  // 通常はダンジョンビュー（viewArea/debugInfo/description）を表示し、戦闘UI（combatArea）は
+  // 隠しておく。戦闘中はrenderCombat()側でこれを反転させる。
+  viewArea.classList.remove('hidden');
+  debugInfo.classList.remove('hidden');
+  description.classList.remove('hidden');
+  combatArea.classList.add('hidden');
 
   // 罠などによるダンジョン内ゲームオーバー（戦闘死亡とは別経路）
   if (_dungeonGameOverMessage) {
@@ -2526,26 +2558,56 @@ function resolveCombatRound(){
   }
 }
 
+// 戦闘UI（OOON本家 #cbt-area 準拠）。敵グラフィックは実装しないため、
+// 味方/敵それぞれのステータスバー＋戦闘ログのみで構成する。
 function renderCombat() {
   const viewArea = document.getElementById('viewArea');
   const debugInfo = document.getElementById('debugInfo');
   const description = document.getElementById('description');
+  const combatArea = document.getElementById('combatArea');
   const choices = document.getElementById('choices');
   choices.innerHTML = '';
 
+  viewArea.classList.add('hidden');
+  debugInfo.classList.add('hidden');
+  description.classList.add('hidden');
+  combatArea.classList.remove('hidden');
+
   const cs = combatState;
-  const enemyRows = cs.enemies.map(e => `
-    <div style="font-size:13px;${e.curMR <= 0 ? 'color:#875;text-decoration:line-through;' : ''}">${e.name}: MR ${Math.max(e.curMR,0)} / ${e.mr}</div>
-  `).join('');
-  viewArea.innerHTML = `<div style="width:480px;height:320px;background:#500;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fdd;gap:4px">
-    ${enemyRows}
-  </div>`;
-  debugInfo.textContent = '';
-  description.textContent = cs.log.join('\n');
+  const playerPct = Math.max(0, player.con / player.maxCon * 100);
+  const enemyRows = cs.enemies.map(e => {
+    const dead = e.curMR <= 0;
+    const pct = e.mr > 0 ? Math.max(0, e.curMR / e.mr * 100) : 0;
+    return `
+      <div class="hp-lbl" style="${dead ? 'color:#555' : ''}">${e.name}: MR ${Math.max(e.curMR,0)}/${e.mr}</div>
+      <div class="hp-bar-wrap"><div class="hp-bar-fill enemy" style="width:${pct}%"></div></div>
+    `;
+  }).join('');
+
+  combatArea.innerHTML = `
+    <h3>⚔ COMBAT!</h3>
+    <div id="cbt-status">
+      <div id="cbt-ally">
+        <div style="font-size:calc(var(--font-sm) - 2px);color:var(--white);margin-bottom:4px">味方</div>
+        <div class="hp-lbl">YOU: 体力 ${Math.max(player.con,0)}/${player.maxCon}</div>
+        <div class="hp-bar-wrap"><div class="hp-bar-fill player" style="width:${playerPct}%"></div></div>
+      </div>
+      <div id="cbt-enemy">
+        <div style="font-size:calc(var(--font-sm) - 2px);color:var(--white);margin-bottom:4px">敵</div>
+        ${enemyRows}
+      </div>
+    </div>
+    <div id="cbt-log-wrap">
+      <div id="cbt-log-header">戦闘ログ</div>
+      <div class="cbt-log" id="clog">${cs.log.join('<br>')}</div>
+    </div>
+  `;
+  const clog = document.getElementById('clog');
+  clog.scrollTop = clog.scrollHeight;
 
   if (cs.playerDead) {
-    description.textContent += '\n\n── ゲームオーバー ──';
     const restartBtn = document.createElement('button');
+    restartBtn.className = 'choice-btn';
     restartBtn.textContent = '最初からやり直す';
     restartBtn.onclick = () => location.reload();
     choices.appendChild(restartBtn);
@@ -2554,6 +2616,7 @@ function renderCombat() {
 
   if (cs.won) {
     const continueBtn = document.createElement('button');
+    continueBtn.className = 'choice-btn';
     continueBtn.textContent = '続ける';
     continueBtn.onclick = () => { combatState = null; render(); };
     choices.appendChild(continueBtn);
@@ -2561,6 +2624,7 @@ function renderCombat() {
   }
 
   const fightBtn = document.createElement('button');
+  fightBtn.className = 'choice-btn';
   fightBtn.textContent = '戦う';
   fightBtn.onclick = () => {
     resolveCombatRound();
@@ -2572,6 +2636,7 @@ function renderCombat() {
   // 使うが、難易度はOOON本家と同じく常にLv1固定（目標値20固定）にする。出目に応じたAPは他の
   // テストと同様に加算される（成否問わず出目×Lv1）。
   const fleeBtn = document.createElement('button');
+  fleeBtn.className = 'choice-btn';
   fleeBtn.textContent = '逃げる';
   fleeBtn.onclick = () => {
     startDiceTest(player, 'spd', (result) => {
