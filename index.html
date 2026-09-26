@@ -2182,27 +2182,6 @@ const MONSTER_DEFS = {
   wander_goblin:    { name: '追放されたゴブリン', mr: 20 },
 };
 
-// ── 武器・防具（OOON本家 WEAPONS_TABLE/ARMOR_TABLE から主要な武具のみ移植。
-//    弓・魔法使い専用杖など、このダンジョンクローラーには無いレンジ攻撃・
-//    呪文システム向けのフィールドは省いている）。
-//    dice: 攻撃ロールで振るD6の個数／adds: 武器固有の固定加算値。
-const WEAPONS_TABLE = [
-  { name: '短剣',           dice: 2, adds: 1, stReq: 1,  dexReq: 4,  cost: 18,  weight: 16,  twoHand: false },
-  { name: '鉈',            dice: 2, adds: 5, stReq: 7,  dexReq: 10, cost: 30,  weight: 25,  twoHand: false },
-  { name: 'ショートソード', dice: 3, adds: 0, stReq: 7,  dexReq: 3,  cost: 35,  weight: 30,  twoHand: false },
-  { name: '棍棒',           dice: 3, adds: 0, stReq: 5,  dexReq: 2,  cost: 15,  weight: 50,  twoHand: false },
-  { name: 'ブロードソード', dice: 3, adds: 4, stReq: 15, dexReq: 10, cost: 70,  weight: 120, twoHand: false },
-  { name: 'シミター',       dice: 4, adds: 0, stReq: 10, dexReq: 11, cost: 60,  weight: 100, twoHand: false },
-  { name: 'ヘビーメイス',   dice: 5, adds: 2, stReq: 17, dexReq: 3,  cost: 120, weight: 200, twoHand: true },
-  { name: 'グレートソード', dice: 6, adds: 0, stReq: 21, dexReq: 18, cost: 120, weight: 170, twoHand: true },
-];
-
-const ARMOR_TABLE = [
-  { name: '布製の鎧',   hits: 3, stReq: 1, cost: 40, weight: 100 },
-  { name: '革製の鎧',   hits: 6, stReq: 2, cost: 50, weight: 200 },
-  { name: 'バックラー', hits: 3, stReq: 1, cost: 10, weight: 75 },
-];
-
 // ── 魔法使い専用の戦闘用呪文（OOON本家SPELLS_L1のうち、戦闘中に使えるものだけを移植）。
 //    マジック・ボルト(ttyf): 詠唱レベルを選んで唱える。コストは6×レベル、ダメージは知力値×レベル。
 //    このラウンドの近接攻撃の代わりにこのダメージがそのままヒット合計として扱われる。
@@ -2439,16 +2418,7 @@ function sleepOutsideFor(hours){
 
     if (dungeonData.floor === 3 && Math.random() < FLOOR3_WANDERING_ENCOUNTER_CHANCE) {
       const combatId = FLOOR3_WANDERING_MONSTERS[Math.floor(Math.random() * FLOOR3_WANDERING_MONSTERS.length)];
-      const mr = MONSTER_DEFS[combatId].mr;
-      startCombat(combatId, {
-        onWin: () => {
-          const gp = rollFloor3Treasure(mr);
-          if (gp > 0) {
-            player.gold += gp;
-            combatState.log.push(`宝物として${gp}GPを手に入れた！`);
-          }
-        }
-      });
+      startCombat(combatId);
       return;
     }
   }
@@ -2725,7 +2695,8 @@ function _sumDice(n){
 // （3D6×10×(MR/30)枚、1→CP/2-4→SP/5-6→GPの通貨判定、1GP=10SP=100CP換算）を
 // このゲームのGP単一通貨に置き換え、さらに1/10のスケールにしたもの。
 // 宝石・宝飾品の生成（2D6で2か12の場合のみ）はこのゲームに対応する仕組みが無いため省略している。
-function rollFloor3Treasure(mr){
+// 全ての戦闘勝利で共通の標準宝物生成として使う（_grantCombatVictory()参照）。
+function rollTreasure(mr){
   const baseAmt = Math.max(1, Math.floor(_sumDice(3) * 10 * (mr / 30)));
   const currencyRoll = Math.floor(Math.random() * 6) + 1;
   const gpPerCoin = currencyRoll === 1 ? 0.01 : currencyRoll <= 4 ? 0.1 : 1;
@@ -2736,16 +2707,7 @@ function maybeTriggerFloor3Wandering(){
   if (dungeonData.floor !== 3) return false;
   if (Math.random() >= FLOOR3_WANDERING_ENCOUNTER_CHANCE) return false;
   const combatId = FLOOR3_WANDERING_MONSTERS[Math.floor(Math.random() * FLOOR3_WANDERING_MONSTERS.length)];
-  const mr = MONSTER_DEFS[combatId].mr;
-  startCombat(combatId, {
-    onWin: () => {
-      const gp = rollFloor3Treasure(mr);
-      if (gp > 0) {
-        player.gold += gp;
-        combatState.log.push(`宝物として${gp}GPを手に入れた！`);
-      }
-    }
-  });
+  startCombat(combatId);
   return true;
 }
 
@@ -3185,7 +3147,7 @@ function resolveCombatRound(pcAction){
   }
 }
 
-// 戦闘勝利処理（AP獲得・レベル再計算・装備品ドロップ・onWinコールバック）。
+// 戦闘勝利処理（AP獲得・レベル再計算・標準宝物生成・onWinコールバック）。
 // 通常のラウンド解決（resolveCombatRound）と、マジック・ボルトの直接ダメージで
 // 敵が即死した場合の両方から呼ばれる共通処理。
 function _grantCombatVictory(){
@@ -3198,13 +3160,11 @@ function _grantCombatVictory(){
   cs.log.push(`${cs.enemies.map(e => e.name).join('・')}を倒した！ AP+${apGain}（累計${player.ap}）`);
   if (leveledUp) cs.log.push(`レベルが${player.level}に上がった！`);
 
-  // 装備品のドロップ（半々の確率で発生、武器/防具も半々）
-  if (Math.random() < 0.5) {
-    const table = Math.random() < 0.5 ? WEAPONS_TABLE : ARMOR_TABLE;
-    const type = table === WEAPONS_TABLE ? 'weapon' : 'armor';
-    const drop = { ...table[Math.floor(Math.random() * table.length)], type };
-    player.inventory.push(drop);
-    cs.log.push(`${drop.name}を手に入れた！`);
+  // 標準宝物生成（OOON本家の宝物作成表準拠、rollTreasure()参照）。全ての戦闘勝利で共通。
+  const gp = rollTreasure(cs.totalMR);
+  if (gp > 0) {
+    player.gold += gp;
+    cs.log.push(`宝物として${gp}GPを手に入れた！`);
   }
 
   if (cs.onWin) cs.onWin();
