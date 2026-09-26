@@ -1814,7 +1814,7 @@ const rooms = {
   // _stepは会話の進行状況（_resolvedと違い、セーブ/ロードでは復元されない＝会話途中でセーブすると
   // 次回ロード時は最初からになる。この程度の頻度・長さの会話なので許容する）。
   room_exile_gate: {
-    image: "room_exile_gate.webp", // TODO: 実画像に差し替え
+    image: "room_exile_gate.webp",
     eventType: "story",
     _step: 0,
     steps: [
@@ -1903,6 +1903,7 @@ const AVAILABLE_IMAGE_FILES = new Set([
   "dead_end_02.webp",
   "room_ambush.webp",
   "room_altar.webp",
+  "room_exile_gate.webp",
   "room_stairs_up.webp",
   "room_stairs_down.webp",
   "room_exile_settlement.webp",
