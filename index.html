@@ -470,6 +470,12 @@ body{display:flex;flex-direction:column;align-items:center;
   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 装備 ──</div>
   <div id="sp-equip" style="margin-bottom:10px"></div>
 
+  <!-- 死体（運んでいるときだけ表示。renderStatusPanel()参照） -->
+  <div id="sp-corpse-wrap" style="display:none">
+   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 死体 ──</div>
+   <div id="sp-corpse" style="margin-bottom:10px"></div>
+  </div>
+
   <!-- 性格 -->
   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 性格 ──</div>
   <div id="sp-alignment" style="margin-bottom:10px"></div>
@@ -1382,6 +1388,21 @@ function renderStatusPanel(){
   (player.type === 'warrior' ? equippedRow('武器2', weapon2, 'weapon2') : '') +
   equippedRow('防具', armorItem, 'armor') +
   invItemsHtml;
+
+ // 死体（運んでいるときだけ表示。食料と交換できない死体でも、ここから手放せる）
+ const corpseIndex = (player.inventory || []).findIndex(i => i.type === 'corpse');
+ const corpseWrap = document.getElementById('sp-corpse-wrap');
+ if (corpseIndex !== -1) {
+  const corpse = player.inventory[corpseIndex];
+  corpseWrap.style.display = '';
+  document.getElementById('sp-corpse').innerHTML = `
+   <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:var(--font-sm);color:#f0ece0">${corpse.name}</span>
+    <button onclick="discardCorpse(${corpseIndex})" style="background:none;border:1px solid var(--border);color:var(--dim);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 8px;cursor:pointer;border-radius:2px">捨てる</button>
+   </div>`;
+ } else {
+  corpseWrap.style.display = 'none';
+ }
 
  // 性格（善悪・秩序混沌の2軸。現状ダンジョン内に選択肢イベントが無いため常に0=真の中立）
  const ethics = player.alignment_ethics || 0;
@@ -2772,7 +2793,7 @@ function discardCorpse(index){
   const item = player.inventory[index];
   if (!item || item.type !== 'corpse') return;
   player.inventory.splice(index, 1);
-  render();
+  renderStatusPanel();
 }
 
 // 両替（OOON本家準拠：手数料なし、10枚単位でまとめて上の単位に繰り上げる）。
@@ -2833,7 +2854,8 @@ function renderShop(){
     choices.appendChild(btn);
   });
 
-  // 死体を食料と物々交換、または手放す（討伐したモンスターの死体を運んでいる場合のみ表示）。
+  // 死体を食料と物々交換（討伐したモンスターの死体を運んでいる場合のみ表示）。
+  // 手放す（捨てる）操作はステータス画面から行う（renderStatusPanel()参照）。
   const corpseIndex = (player.inventory || []).findIndex(i => i.type === 'corpse');
   if (corpseIndex !== -1) {
     const corpse = player.inventory[corpseIndex];
@@ -2841,11 +2863,6 @@ function renderShop(){
     tradeBtn.textContent = `${corpse.name}を食料と交換する（+${CORPSE_FOOD_TRADE_DAYS}日分）`;
     tradeBtn.onclick = () => tradeCorpseForFood(corpseIndex);
     choices.appendChild(tradeBtn);
-
-    const discardBtn = document.createElement('button');
-    discardBtn.textContent = `${corpse.name}を捨てる`;
-    discardBtn.onclick = () => discardCorpse(corpseIndex);
-    choices.appendChild(discardBtn);
   }
 
   // 両替（10CP=1SP、10SP=1GP。手数料なし）。
