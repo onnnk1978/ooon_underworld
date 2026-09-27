@@ -1740,10 +1740,14 @@ const DUNGEON_FLOORS = {
     tileFlavor: {
       "3,7": "しばらくまっすぐ通路が続いているようだ。通路は完全な闇ではなくうっすらと光をはなっており、明かりを持っていなくても様子がわかる。",
       "3,10": "ダンジョンの入口。古びた巨大な鉄門は固く閉じられている。",
-      // (3,1)は3方向に開けた分岐点だが、向いている方向によってviewTypeが
-      // t_junction/fork/cross_junctionと変わってしまうため、常にT字路として
-      // 描写されるよう固定のテキストを設定している（tileFlavorは向きを問わない）。
-      "3,1": "ここは道が三方に分岐する交差点だ。"
+      // 3方向・2方向に開けた分岐点は、向いている方向によってviewTypeが
+      // t_junction/fork/corner等と変わってしまうため、常に同じ描写になる
+      // よう固定のテキストを設定している（tileFlavorは向きを問わない）。
+      "3,1": "ここは道が三方に分岐する交差点だ。",
+      "3,5": "三つの通路がひとつに交わる、T字状の分岐点だ。",
+      "5,1": "通路はここで90度折れ曲がっている。",
+      "1,1": "直角の曲がり角だ。先の様子はここからは窺えない。",
+      "1,5": "壁にぶつかり、通路は直角に折れ曲がっている。"
     },
     // 座標＋向きを固定した専用画像（pickVariant()のハッシュ選択より優先される）。
     // キーは "x,y,facing"（facing: 0=北 1=東 2=南 3=西）。
@@ -3076,12 +3080,15 @@ function render() {
       _dungeonMessage = null;
     } else {
       const dynText = dungeonData.dynamicFlavor ? dungeonData.dynamicFlavor(player.x, player.y) : null;
+      // 直進通路で横を向いた直後（画像は壁アップになる）は、実際のviewTypeが
+      // t_junction等に変わっていても、見た目通り「直進通路」の描写のままにする。
+      const flavorViewType = facingWallFromStraight ? 'straight' : viewType;
       if (dynText != null) {
         description.textContent = dynText;
       } else if (dungeonData.tileFlavor[posKey]) {
         description.textContent = dungeonData.tileFlavor[posKey];
       } else {
-        description.textContent = pickGenericFlavor(viewType) || '';
+        description.textContent = pickGenericFlavor(flavorViewType) || '';
       }
     }
 
