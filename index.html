@@ -2052,10 +2052,11 @@ const DUNGEON_FLOORS = {
     interactCells: {},
     groundItems: {},
     examineCells: {},
-    // 出口が1方向しかない部屋の入口（未実装の部屋7・6・8・9）は、開口方向の
+    // 出口が1方向しかない部屋の入口（未実装の部屋7・8・9）は、開口方向の
     // 正面・背面(straight/dead_end)以外の左右を向くと実際には壁に正対するだけなのに
     // corner_left/corner_rightの「曲がり角」画像・テキストになってしまうため、
     // 15,9等と同様に壁アップ画像＋壁のテキストに差し替えている。
+    // 部屋6(5,10)は南向き（行き止まり側）に古びた井戸の専用画像・テキストを設定している。
     viewOverrides: {
       "10,15,1": "wall_03.webp",
       "10,15,3": "wall_04.webp",
@@ -2063,6 +2064,7 @@ const DUNGEON_FLOORS = {
       "5,4,2": "wall_04.webp",
       "5,10,1": "wall_02.webp",
       "5,10,3": "wall_01.webp",
+      "5,10,2": "room_well.webp",
       "6,14,0": "wall_03.webp",
       "6,14,2": "wall_04.webp"
     },
@@ -2073,6 +2075,7 @@ const DUNGEON_FLOORS = {
       "5,4,2": pickWallFacingFlavor,
       "5,10,1": pickWallFacingFlavor,
       "5,10,3": pickWallFacingFlavor,
+      "5,10,2": "通路の真ん中に古びた井戸がある。\n井戸の向こう側で通路は行き止まりになっている。\n南の壁面には大きく文章が刻まれている。\n「居住区への君の貢献が皆を豊かにする！」",
       "6,14,0": pickWallFacingFlavor,
       "6,14,2": pickWallFacingFlavor
     }
@@ -2317,6 +2320,7 @@ const AVAILABLE_IMAGE_FILES = new Set([
   "room_stairs_down.webp",
   "room_exile_settlement.webp",
   "room_exile_sleep.webp",
+  "room_well.webp",
   "room_outside_sleep_bedding.webp",
   "gate_entrance.webp",
   "wall_01.webp",
