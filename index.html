@@ -2745,6 +2745,16 @@ function sellWeaponItem(index){
   render();
 }
 
+// モンスターの死体1体につき交換できる食料の日数。
+const CORPSE_FOOD_TRADE_DAYS = 3;
+function tradeCorpseForFood(index){
+  const item = player.inventory[index];
+  if (!item || item.type !== 'corpse') return;
+  player.inventory.splice(index, 1);
+  player._food = (player._food || 0) + CORPSE_FOOD_TRADE_DAYS;
+  render();
+}
+
 // 両替（OOON本家準拠：手数料なし、10枚単位でまとめて上の単位に繰り上げる）。
 function exchangeCPtoSP(){
   const cp = player.cp || 0;
@@ -2801,6 +2811,16 @@ function renderShop(){
     btn.onclick = () => sellWeaponItem(index);
     choices.appendChild(btn);
   });
+
+  // 死体を食料と物々交換（討伐したモンスターの死体を運んでいる場合のみ表示）。
+  const corpseIndex = (player.inventory || []).findIndex(i => i.type === 'corpse');
+  if (corpseIndex !== -1) {
+    const corpse = player.inventory[corpseIndex];
+    const btn = document.createElement('button');
+    btn.textContent = `${corpse.name}を食料と交換する（+${CORPSE_FOOD_TRADE_DAYS}日分）`;
+    btn.onclick = () => tradeCorpseForFood(corpseIndex);
+    choices.appendChild(btn);
+  }
 
   // 両替（10CP=1SP、10SP=1GP。手数料なし）。
   const cpAmt = player.cp || 0;
@@ -3599,6 +3619,17 @@ function _grantCombatVictory(){
   if (gp > 0) {
     gainGP(gp);
     cs.log.push(`宝物として${gp}GPを手に入れた！`);
+  }
+
+  // 死体は一つしか持ち運べない（複数体を倒した場合は先頭の敵の死体を対象にする）。
+  // 既に死体を運んでいる場合は諦める。居住地の露店で食料と物々交換できる。
+  const corpseName = `${cs.enemies[0].name}の死体`;
+  if ((player.inventory || []).some(i => i.type === 'corpse')) {
+    cs.log.push(`${corpseName}を見つけたが、これ以上死体は運べない。`);
+  } else {
+    player.inventory.push({ type: 'corpse', name: corpseName, weight: 60,
+      desc: '討伐した魔物の死体。居住地の露店に持ち帰れば食料と交換できる。' });
+    cs.log.push(`${corpseName}を持ち帰ることにした。`);
   }
 
   if (cs.onWin) cs.onWin();
