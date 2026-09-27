@@ -2767,6 +2767,13 @@ function tradeCorpseForFood(index){
   player._food = (player._food || 0) + CORPSE_FOOD_TRADE_DAYS;
   render();
 }
+// 人間型など交換できない死体も含め、運んでいる死体を手放す（重量が邪魔なとき用）。
+function discardCorpse(index){
+  const item = player.inventory[index];
+  if (!item || item.type !== 'corpse') return;
+  player.inventory.splice(index, 1);
+  render();
+}
 
 // 両替（OOON本家準拠：手数料なし、10枚単位でまとめて上の単位に繰り上げる）。
 function exchangeCPtoSP(){
@@ -2826,14 +2833,19 @@ function renderShop(){
     choices.appendChild(btn);
   });
 
-  // 死体を食料と物々交換（討伐したモンスターの死体を運んでいる場合のみ表示）。
+  // 死体を食料と物々交換、または手放す（討伐したモンスターの死体を運んでいる場合のみ表示）。
   const corpseIndex = (player.inventory || []).findIndex(i => i.type === 'corpse');
   if (corpseIndex !== -1) {
     const corpse = player.inventory[corpseIndex];
-    const btn = document.createElement('button');
-    btn.textContent = `${corpse.name}を食料と交換する（+${CORPSE_FOOD_TRADE_DAYS}日分）`;
-    btn.onclick = () => tradeCorpseForFood(corpseIndex);
-    choices.appendChild(btn);
+    const tradeBtn = document.createElement('button');
+    tradeBtn.textContent = `${corpse.name}を食料と交換する（+${CORPSE_FOOD_TRADE_DAYS}日分）`;
+    tradeBtn.onclick = () => tradeCorpseForFood(corpseIndex);
+    choices.appendChild(tradeBtn);
+
+    const discardBtn = document.createElement('button');
+    discardBtn.textContent = `${corpse.name}を捨てる`;
+    discardBtn.onclick = () => discardCorpse(corpseIndex);
+    choices.appendChild(discardBtn);
   }
 
   // 両替（10CP=1SP、10SP=1GP。手数料なし）。
