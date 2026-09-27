@@ -2746,7 +2746,7 @@ function sellWeaponItem(index){
 }
 
 // モンスターの死体1体につき交換できる食料の日数。
-const CORPSE_FOOD_TRADE_DAYS = 3;
+const CORPSE_FOOD_TRADE_DAYS = 1;
 function tradeCorpseForFood(index){
   const item = player.inventory[index];
   if (!item || item.type !== 'corpse') return;
@@ -3622,14 +3622,13 @@ function _grantCombatVictory(){
   }
 
   // 死体は一つしか持ち運べない（複数体を倒した場合は先頭の敵の死体を対象にする）。
-  // 既に死体を運んでいる場合は諦める。居住地の露店で食料と物々交換できる。
+  // 既に死体を運んでいる場合は諦める。持ち帰るかどうかは「続ける」画面でプレイヤーが選ぶ
+  // （cs.pendingCorpseNameが設定されている間、render()が持ち帰る／置いていくの選択肢を出す）。
   const corpseName = `${cs.enemies[0].name}の死体`;
   if ((player.inventory || []).some(i => i.type === 'corpse')) {
     cs.log.push(`${corpseName}を見つけたが、これ以上死体は運べない。`);
   } else {
-    player.inventory.push({ type: 'corpse', name: corpseName, weight: 60,
-      desc: '討伐した魔物の死体。居住地の露店に持ち帰れば食料と交換できる。' });
-    cs.log.push(`${corpseName}を持ち帰ることにした。`);
+    cs.pendingCorpseName = corpseName;
   }
 
   if (cs.onWin) cs.onWin();
@@ -3714,6 +3713,26 @@ function renderCombat() {
   }
 
   if (cs.won) {
+    if (cs.pendingCorpseName) {
+      const takeBtn = document.createElement('button');
+      takeBtn.className = 'choice-btn';
+      takeBtn.textContent = `${cs.pendingCorpseName}を持ち帰る`;
+      takeBtn.onclick = () => {
+        player.inventory.push({ type: 'corpse', name: cs.pendingCorpseName, weight: 60,
+          desc: '討伐した魔物の死体。居住地の露店に持ち帰れば食料と交換できる。' });
+        combatState = null;
+        render();
+      };
+      choices.appendChild(takeBtn);
+
+      const leaveBtn = document.createElement('button');
+      leaveBtn.className = 'choice-btn';
+      leaveBtn.textContent = '死体は置いていく';
+      leaveBtn.onclick = () => { combatState = null; render(); };
+      choices.appendChild(leaveBtn);
+      return;
+    }
+
     const continueBtn = document.createElement('button');
     continueBtn.className = 'choice-btn';
     continueBtn.textContent = '続ける';
