@@ -1945,7 +1945,7 @@ const DUNGEON_FLOORS = {
       "  # # # # #    #", // y=3
       "### ### ### ## #", // y=4
       "#           ## #", // y=5
-      "### ####### ## #", // y=6
+      "### #######  # #", // y=6 (x=12: フロア2-1へ通じる壁の穴。stairsLinksで管理)
       "  # #     # ## #", // y=7
       "### #     # ## ##", // y=8
       "#   #     #     #", // y=9 (元「2」＝落とし格子/西壁, 元「1」＝レバー/東壁)
@@ -1967,6 +1967,15 @@ const DUNGEON_FLOORS = {
         description: "ここは上の階への上り階段がある。石段が上へ続いている。",
         label: "階段を上る",
         action: "event_stairs_up_f3"
+      },
+      // 壁に空いた穴（東の突き当たり）。西向きに通路が続き、東向きだと穴そのものが見える。
+      // くぐるとフロア2-1（map-9.txt）へ繋がる。
+      "12,6": {
+        awayFacing: 3,
+        image: "room_hole.webp",
+        description: "壁に人ひとりがどうにか通れそうな、小さな穴が空いている。奥は真っ暗で何も見えない。",
+        label: "穴をくぐる",
+        action: "event_hole_to_floor2b"
       }
     },
     // type:'monster'の罠は敵との強制戦闘。倒すと_resolved=trueになり以後は出現しない
@@ -2021,6 +2030,55 @@ const DUNGEON_FLOORS = {
       "15,9,0": "wall_01.webp",
       "15,9,2": "wall_01.webp"
     }
+  },
+  // フロア2(12,6)の壁の穴からつながる、隠しエリア「フロア2-1」。添付マップ(map-9.txt)を反映。
+  // マップ中の「1」は壁の穴（stairsLinksで管理。フロア2(12,6)と相互に行き来する）、
+  // 「2」「3」は巨大ネズミとの強制戦闘（trapCellsで管理。数字はグループの区別のみで
+  // 内容は同じ巨大ネズミ、countで頭数を変える）。alwaysDark:trueにより深度（floor値）に
+  // 関わらず常闇のフロアとして扱い、松明が無いと周囲が一切わからない
+  // （isDarkFloor()/render()参照）。floor値はDUNGEON_FLOORSのキーと一致させる必要がある
+  // （セーブ/ロードやhashCoord()がdungeonData.floorをそのままキー・数値として使うため）。
+  2.1: {
+    floor: 2.1,
+    alwaysDark: true,
+    width: 11,
+    height: 7,
+    tiles: [
+      "###########", // y=0
+      "#     #   #", // y=1 (元「2」＝巨大ネズミ×3)
+      "# ### ### #", // y=2
+      "#   # #   #", // y=3 (元「3」＝巨大ネズミ×5、元「2」＝巨大ネズミ×3)
+      "### ##### #", // y=4
+      "#         #", // y=5 (元「2」＝巨大ネズミ×3)
+      "### #######"  // y=6 (元「1」＝壁の穴。フロア2(12,6)と相互に繋がる)
+    ],
+    roomCells: {},
+    // 壁の穴（南側のみ開口・行き止まり）。北向き＝奥の通路側、南向き＝穴そのもの。
+    stairsLinks: {
+      "3,6": {
+        awayFacing: 0,
+        image: "room_hole.webp",
+        description: "振り返ると、壁に空いた小さな穴が見える。ここを戻ればフロア2へ抜けられそうだ。",
+        label: "穴を戻る",
+        action: "event_hole_to_floor2"
+      }
+    },
+    // 巨大ネズミの群れとの強制戦闘。倒すと_resolved=trueになり以後は出現しない
+    // （逃走・敗北では解決済みにならず、再訪すればまた遭遇する）。
+    trapCells: {
+      "7,1": { id: "floor2b_rats_1", type: "monster", combatId: "wander_rat", count: 3 },
+      "7,3": { id: "floor2b_rats_2", type: "monster", combatId: "wander_rat", count: 3 },
+      "1,5": { id: "floor2b_rats_3", type: "monster", combatId: "wander_rat", count: 3 },
+      "5,3": { id: "floor2b_rats_4", type: "monster", combatId: "wander_rat", count: 5 }
+    },
+    tileFlavor: {
+      "3,6": "壁の穴を抜けると、狭い空間に出た。今までに比べてここは本当に真っ暗だ。この先は松明がないと進めない。"
+    },
+    gateCells: {},
+    interactCells: {},
+    groundItems: {},
+    examineCells: {},
+    viewOverrides: {}
   },
   // フロア2(0,9)の落とし格子の先にある上り階段からつながる、フロア3。
   // 添付マップ(map-7.txt)を反映。マップ中の数字(1〜9)・文字(A)は部屋の位置を示すマーカーで、
@@ -2984,20 +3042,26 @@ function formatItemCost(costGP){
   return `${cp}CP`;
 }
 
-// 松明1本の燃焼時間（分）。フロア4以降はこれが尽きると周囲が把握できなくなる。
+// 松明1本の燃焼時間（分）。フロア4以降・またはalwaysDark:trueのフロアはこれが
+// 尽きると周囲が把握できなくなる。
 const TORCH_BURN_MINUTES = 100;
 function hasTorchLit(){
   return (player.torchRemainingMinutes || 0) > 0;
 }
-// フロア4以降でのみ松明の燃焼時間を消費する（フロア3以前は光源を必要としないため）。
-// 燃焼時間が尽きた場合、所持品に予備があれば自動的に次の1本を消費して点け直す
-// （食料の自動消費と同様の扱い）。予備が無ければ0のまま＝暗闇になる。
+// フロア4以降、またはフロアデータにalwaysDark:trueが設定されている場合（深度に関わらず
+// 常闇のエリア）に松明を必要とする。それ以外のフロアは光源を必要としないため対象外。
+function isDarkFloor(fd){
+  return !!fd && (fd.floor >= 4 || fd.alwaysDark === true);
+}
+// フロア4以降・alwaysDarkフロアでのみ松明の燃焼時間を消費する（それ以外は光源を
+// 必要としないため）。燃焼時間が尽きた場合、所持品に予備があれば自動的に次の1本を
+// 消費して点け直す（食料の自動消費と同様の扱い）。予備が無ければ0のまま＝暗闇になる。
 function torchCount(){
   return (player.inventory || []).filter(i => i.name === '松明').length;
 }
 
 function tickTorch(minutes){
-  if (!dungeonData || dungeonData.floor < 4) return;
+  if (!dungeonData || !isDarkFloor(dungeonData)) return;
   const wasLit = hasTorchLit();
   player.torchRemainingMinutes = (player.torchRemainingMinutes || 0) - minutes;
   while (player.torchRemainingMinutes <= 0) {
@@ -3526,7 +3590,7 @@ function triggerPitTrap(trap){
 // モンスターとの強制戦闘（不意打ち）。倒すとtrap._resolved=trueになり以後は出現しない。
 // 逃走・敗北では解決済みにならないため、再訪すればまた同じ罠が発動する。
 function triggerMonsterEncounter(trap){
-  startCombat(trap.combatId, { onWin: () => { trap._resolved = true; } });
+  startCombat(trap.combatId, { count: trap.count, onWin: () => { trap._resolved = true; } });
 }
 
 // ── フロア3・4のワンダリングモンスター ──
@@ -3763,7 +3827,7 @@ function render() {
     const viewType = getViewType(player.x, player.y, player.facing);
 
     // フロア4以降は松明が燃えていないと周囲を把握できない（移動自体は手探りで可能）。
-    const isDark = dungeonData.floor >= 4 && !hasTorchLit();
+    const isDark = isDarkFloor(dungeonData) && !hasTorchLit();
 
     // 振り返り直後だけは新規にハッシュ選択せず、直前の画像を反転して使い回す
     // （見た目の整合性のため。前進／左右を向く操作をすると通常選択に戻る）
@@ -3937,6 +4001,16 @@ function handleAction(action) {
   if (action === 'event_stairs_up_f3_from_f4') {
     // フロア4(6,14)の階段 → フロア3(1,18・部屋A)の階段の踊り場へ（奥の通路側＝北向きで到着）
     enterFloor(3, 1, 18, 0);
+    return;
+  }
+  if (action === 'event_hole_to_floor2b') {
+    // フロア2(12,6)の壁の穴 → フロア2-1(3,6)へ（奥の通路側＝北向きで到着）
+    enterFloor(2.1, 3, 6, 0);
+    return;
+  }
+  if (action === 'event_hole_to_floor2') {
+    // フロア2-1(3,6)の壁の穴 → フロア2(12,6)へ（奥の通路側＝西向きで到着）
+    enterFloor(2, 12, 6, 3);
     return;
   }
   if (action === 'pull_lever_1') {
