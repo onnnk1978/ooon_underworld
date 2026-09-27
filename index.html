@@ -3328,11 +3328,12 @@ function _sumDice(n){
 
 // OOON本家 generateTreasure()/rollTreasureCoins()/collectCoins() のコイン算出部分に準拠。
 // コインの枚数（3D6×10×(MR/30)）を算出し、1回のd6判定で通貨単位を決める
-// （1→CP、2-4→SP、5-6→GP。全戦闘勝利で共通の判定）。
+// （1→CP、2-4→SP、5-6→GP。全戦闘勝利で共通の判定）。標準の枚数だとこのゲームの
+// バランスには過剰なため、単位（CP/SP/GPいずれでも）を問わず1/10にスケールしている。
 // 宝石・宝飾品の生成（2D6で2か12の場合のみ）はこのゲームに対応する仕組みが無いため省略している。
 // 全ての戦闘勝利で共通の標準宝物生成として使う（_grantCombatVictory()参照）。
 function rollTreasure(mr){
-  const amount = Math.max(1, Math.floor(_sumDice(3) * 10 * (mr / 30)));
+  const amount = Math.max(1, Math.floor(_sumDice(3) * 10 * (mr / 30) / 10));
   const currencyRoll = Math.floor(Math.random() * 6) + 1;
   const unit = currencyRoll === 1 ? 'CP' : currencyRoll <= 4 ? 'SP' : 'GP';
   return { amount, unit };
