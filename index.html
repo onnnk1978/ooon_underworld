@@ -1909,12 +1909,27 @@ const DUNGEON_FLOORS = {
       }
     },
     trapCells: {},
-    tileFlavor: {},
+    // 10,8は北・西・南の3方向に開けたT字路だが、西向き(facing3)だけは正面・左・右が
+    // すべて開いて見えるため（背後の東は判定されない）誤って十字路と判定されてしまう。
+    // 固定テキストを設定し、向きに関係なく常にT字路の描写になるようにしている。
+    tileFlavor: {
+      "10,8": "ここで通路は三方に分かれ、それぞれ異なる闇へと繋がっている。"
+    },
     gateCells: {},
     interactCells: {},
     groundItems: {},
     examineCells: {},
-    viewOverrides: {}
+    // 10,15は実際には北方向のみに開けた通路で、東西を向くと壁に正対するだけなのに
+    // corner_left/corner_rightの「曲がり角」画像・テキストになってしまうため、
+    // 15,9等と同様に壁アップ画像＋壁のテキストに差し替えている。
+    viewOverrides: {
+      "10,15,1": "wall_03.webp",
+      "10,15,3": "wall_04.webp"
+    },
+    tileFlavorByFacing: {
+      "10,15,1": pickWallFacingFlavor,
+      "10,15,3": pickWallFacingFlavor
+    }
   }
 };
 
