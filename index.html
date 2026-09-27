@@ -785,6 +785,13 @@ function changeAlignment(ethicsDelta, orderDelta, pc){
  if (orderDelta) pc.alignment_order = Math.max(-100, Math.min(100, (pc.alignment_order||0) + orderDelta));
 }
 
+// 追放者の居住区での信頼度。死体の提供・依頼の達成で上昇する（現状、下がる手段は無い）。
+// 浮動小数の誤差が蓄積しないよう小数第1位で丸める。
+function changeSettlementTrust(delta, pc){
+ pc = pc || player;
+ pc.settlementTrust = Math.max(0, Math.round(((pc.settlementTrust || 0) + delta) * 10) / 10);
+}
+
 // ── NPC名候補（ランダム名ボタン用） ──
 const NPC_NAMES = [
  'ガルム','ソーニャ','レイナ','ドルク','マリオン','ベック','ハンナ','トーレ',
@@ -956,6 +963,7 @@ function buildCharacter(){
  pc.ap = 0;
  pc.level = 1;
  pc.torchRemainingMinutes = 0;
+ pc.settlementTrust = 0; // 追放者の居住区での信頼度（リーダーへの死体提供・依頼達成で上昇）
 
  // ダンジョンクローラー向けの汎用インベントリ枠（中身はOOONの装備システムに準拠しなくてよい）
  pc.inventory = [];
@@ -1372,6 +1380,7 @@ function renderStatusPanel(){
   ['LV', player.level, 'var(--gold)'],
   ['食料', `${food}日分`, foodColor],
   ['松明', `${torchCount()}本`, 'var(--white)'],
+  ['居住区信頼度', (player.settlementTrust || 0).toFixed(1), 'var(--white)'],
  ].map(([l, v, c]) => `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:6px 8px;text-align:center">
    <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:3px">${l}</div>
    <div style="font-size:var(--font-base);color:${c}">${v}</div>
@@ -1521,7 +1530,14 @@ function _captureFloorsState(){
   Object.keys(floor.interactCells || {}).forEach(k => { interactCells[k] = !!floor.interactCells[k]._resolved; });
   const groundItems = {};
   Object.keys(floor.groundItems || {}).forEach(k => { groundItems[k] = !!floor.groundItems[k]._resolved; });
-  floorsState[floorNum] = { trapCells, gateCells, interactCells, groundItems };
+  // フロア2-1の巨大ネズミの巣（trapCellsの外側で管理している、リスポーン計算用の
+  // フロア単位フラグ）。他のフロアにはこのフィールドが無いためundefinedのまま
+  // （JSON化時に自動的に省略される）。
+  floorsState[floorNum] = {
+   trapCells, gateCells, interactCells, groundItems,
+   nestClearedDay: floor._nestClearedDay,
+   nestReported: floor._nestReported,
+  };
  });
  return floorsState;
 }
@@ -1580,6 +1596,8 @@ function _applySaveData(data){
   Object.keys(st.gateCells || {}).forEach(k => { if (floor.gateCells[k]) floor.gateCells[k].open = st.gateCells[k]; });
   Object.keys(st.interactCells || {}).forEach(k => { if (floor.interactCells[k]) floor.interactCells[k]._resolved = st.interactCells[k]; });
   Object.keys(st.groundItems || {}).forEach(k => { if (floor.groundItems[k]) floor.groundItems[k]._resolved = st.groundItems[k]; });
+  if (st.nestClearedDay !== undefined) floor._nestClearedDay = st.nestClearedDay;
+  if (st.nestReported !== undefined) floor._nestReported = st.nestReported;
  });
  Object.keys(data.roomsState || {}).forEach(id => { if (rooms[id]) rooms[id]._resolved = data.roomsState[id]; });
 
@@ -1849,6 +1867,7 @@ function advanceGameTime(minutes){
  tickInsomnia();
  tickTorch(m);
  tickFootwearWear();
+ tickRatNestRespawn();
 }
 
 // ============================================================
@@ -2074,6 +2093,12 @@ const DUNGEON_FLOORS = {
     tileFlavor: {
       "3,6": "壁の穴を抜けると、狭い空間に出た。今までに比べてここは本当に真っ暗だ。この先は松明がないと進めない。"
     },
+    // 巨大ネズミの巣の駆除依頼（居住区リーダー）関連の状態。全て倒すと_nestClearedDayに
+    // その日付を記録し、90日経過でtickRatNestRespawn()が各trapCellsを_resolved=falseへ
+    // 戻す（巣がリスポーンする）。_nestReportedは報告済み（報酬受け取り済み）フラグで、
+    // リスポーン時に一緒にリセットされる。
+    _nestClearedDay: null,
+    _nestReported: false,
     gateCells: {},
     interactCells: {},
     groundItems: {},
@@ -2353,6 +2378,7 @@ const rooms = {
     settlementDescription: "追放者たちの居住区。粗末な木造りの小屋がいくつも並び、広間の中央にはボロボロの天幕が張られている。",
     settlementChoices: [
       { label: "露店を利用する", action: "exile_shop" },
+      { label: "リーダーと話す", action: "exile_talk_leader" },
       { label: "寝る", action: "exile_sleep" }
     ]
   }
@@ -2453,6 +2479,7 @@ let player = null; // キャラ作成完了後、enterDungeon()で生成され�
 let combatState = null;
 let shopState = null; // nullなら非表示。{}なら露店画面を表示中（render()参照）
 let sleepState = null; // nullなら非表示。{}なら睡眠時間選択画面を表示中（render()参照）
+let leaderState = null; // nullなら非表示。{screen:'main'|'quests'}なら居住区リーダーとの会話画面を表示中（render()参照）
 
 // 「振り返る」で見た目の整合性を保つための状態。
 // 直前に表示していた廊下画像を記憶しておき、振り返り時はハッシュで新規選択せず、
@@ -3173,6 +3200,8 @@ function sellWeaponItem(index){
 const CORPSE_FOOD_TRADE_DAYS = 1;
 // 露店で一度だけ表示する店主の台詞（renderShop()が読んだら即座にクリアする）。
 let _shopMessage = null;
+// 居住区リーダーとの会話で一度だけ表示する台詞（renderLeaderDialog()系が読んだら即座にクリアする）。
+let _leaderMessage = null;
 function tradeCorpseForFood(index){
   const item = player.inventory[index];
   if (!item || item.type !== 'corpse') return;
@@ -3327,6 +3356,170 @@ function renderShop(){
   const backBtn = document.createElement('button');
   backBtn.textContent = '出る';
   backBtn.onclick = () => closeShop();
+  choices.appendChild(backBtn);
+}
+
+// ── 居住区リーダー（ドワーフ）との会話（広間中央の天幕を選ぶと開始する） ──
+// leaderState: null=非表示。{screen:'main'}=最初の会話画面、{screen:'quests'}=依頼一覧。
+function openLeaderDialog(){
+  leaderState = { screen: 'main' };
+  render();
+}
+function closeLeaderDialog(){
+  leaderState = null;
+  render();
+}
+
+// 運んでいる死体（人間型でも可。食用ではなく提供なので露店のような拒否は無い）をリーダーに
+// 渡す。居住区信頼度が少し上がる。
+function handOverCorpseToLeader(){
+  const idx = (player.inventory || []).findIndex(i => i.type === 'corpse');
+  if (idx === -1) return;
+  const corpse = player.inventory[idx];
+  player.inventory.splice(idx, 1);
+  changeSettlementTrust(0.1);
+  _leaderMessage = `${corpse.name}を渡した。ドワーフ「役に立つかもな。ありがたく使わせてもらうよ。」`;
+  render();
+}
+
+// 水汲みの依頼（フロア3の井戸を利用する体裁の、その場で完結する仕事）。
+// 5回こなすごとに一旦打ち止めになり、翌日5:00まで再受託できない。
+function isWaterQuestOnCooldown(){
+  return !!player._waterQuestCooldownUntil && GAME_TIME.totalMinutes < player._waterQuestCooldownUntil;
+}
+function doWaterQuest(){
+  if (isWaterQuestOnCooldown()) return;
+  player.ap = (player.ap || 0) + 2;
+  player.level = levelFromAP(player.ap);
+  changeSettlementTrust(0.2);
+  player._waterQuestBatchCount = (player._waterQuestBatchCount || 0) + 1;
+  if (player._waterQuestBatchCount >= 5) {
+    player._waterQuestBatchCount = 0;
+    player._waterQuestCooldownUntil = (currentAbsDay() + 1) * 24 * 60 + 5 * 60;
+    _leaderMessage = '井戸から水を汲んで居住区に届けた。ドワーフ「今日はよく働いたな。もう十分だ、また明日にしてくれ。」';
+  } else {
+    _leaderMessage = '井戸から水を汲んで居住区に届けた。ドワーフ「助かるよ。」';
+  }
+  render();
+}
+
+// 巨大ネズミの巣の駆除依頼（フロア2-1の4体の強制戦闘すべてを解決すると報告できる）。
+function isRatNestCleared(){
+  return Object.values(DUNGEON_FLOORS[2.1].trapCells).every(t => t._resolved);
+}
+function reportRatNestQuest(){
+  const fd = DUNGEON_FLOORS[2.1];
+  if (!isRatNestCleared() || fd._nestReported) return;
+  fd._nestReported = true;
+  player.ap = (player.ap || 0) + 500;
+  player.level = levelFromAP(player.ap);
+  changeSettlementTrust(10);
+  _leaderMessage = 'ドワーフ「よくやった！ これで巣の心配はしばらくないだろう。」';
+  render();
+}
+
+function renderLeaderDialog(){
+  if (leaderState.screen === 'quests') { renderLeaderQuests(); return; }
+  renderLeaderMain();
+}
+
+function renderLeaderMain(){
+  const viewArea = document.getElementById('viewArea');
+  const debugInfo = document.getElementById('debugInfo');
+  const description = document.getElementById('description');
+  const combatArea = document.getElementById('combatArea');
+  const shopList = document.getElementById('shop-list');
+  const choices = document.getElementById('choices');
+  choices.innerHTML = '';
+
+  viewArea.classList.remove('hidden');
+  debugInfo.classList.remove('hidden');
+  description.classList.remove('hidden');
+  combatArea.classList.add('hidden');
+  shopList.classList.add('hidden');
+  shopList.innerHTML = '';
+
+  viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('room_exile_leader.webp')
+    ? imageOrPlaceholder('room_exile_leader.webp', '居住区リーダー')
+    : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_leader.webp 未用意]</div>`;
+  debugInfo.textContent = `居住区信頼度: ${(player.settlementTrust || 0).toFixed(1)}`;
+  description.textContent = _leaderMessage || 'ドワーフは天幕の前でパイプをふかしている。「何か用か？」';
+  _leaderMessage = null;
+
+  const corpseIdx = (player.inventory || []).findIndex(i => i.type === 'corpse');
+  if (corpseIdx !== -1) {
+    const corpse = player.inventory[corpseIdx];
+    const btn = document.createElement('button');
+    btn.textContent = `${corpse.name}を渡す`;
+    btn.onclick = () => handOverCorpseToLeader();
+    choices.appendChild(btn);
+  }
+
+  const questBtn = document.createElement('button');
+  questBtn.textContent = '依頼を受ける';
+  questBtn.onclick = () => { leaderState.screen = 'quests'; render(); };
+  choices.appendChild(questBtn);
+
+  const backBtn = document.createElement('button');
+  backBtn.textContent = '立ち去る';
+  backBtn.onclick = () => closeLeaderDialog();
+  choices.appendChild(backBtn);
+}
+
+function renderLeaderQuests(){
+  const viewArea = document.getElementById('viewArea');
+  const debugInfo = document.getElementById('debugInfo');
+  const description = document.getElementById('description');
+  const combatArea = document.getElementById('combatArea');
+  const shopList = document.getElementById('shop-list');
+  const choices = document.getElementById('choices');
+  choices.innerHTML = '';
+
+  viewArea.classList.remove('hidden');
+  debugInfo.classList.remove('hidden');
+  description.classList.remove('hidden');
+  combatArea.classList.add('hidden');
+  shopList.classList.add('hidden');
+  shopList.innerHTML = '';
+
+  viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('room_exile_leader.webp')
+    ? imageOrPlaceholder('room_exile_leader.webp', '居住区リーダー')
+    : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_leader.webp 未用意]</div>`;
+  debugInfo.textContent = `居住区信頼度: ${(player.settlementTrust || 0).toFixed(1)}`;
+  description.textContent = _leaderMessage || 'ドワーフ「どんな仕事を手伝ってくれるってんだ？」';
+  _leaderMessage = null;
+
+  const waterBtn = document.createElement('button');
+  if (isWaterQuestOnCooldown()) {
+    waterBtn.textContent = '（今日の水汲みはもう十分だと言われた。また明日来てくれ）';
+    waterBtn.disabled = true;
+  } else {
+    waterBtn.textContent = '水汲みの仕事をこなす（経験値+2、居住区信頼度+0.2）';
+    waterBtn.onclick = () => doWaterQuest();
+  }
+  choices.appendChild(waterBtn);
+
+  const nestBtn = document.createElement('button');
+  const nestCleared = isRatNestCleared();
+  const fd = DUNGEON_FLOORS[2.1];
+  if (nestCleared && !fd._nestReported) {
+    nestBtn.textContent = '巨大ネズミの巣を駆除したと報告する（経験値+500、居住区信頼度+10）';
+    nestBtn.onclick = () => reportRatNestQuest();
+  } else if (nestCleared && fd._nestReported) {
+    nestBtn.textContent = '（巨大ネズミの巣は片付いている。しばらくは静からしい）';
+    nestBtn.disabled = true;
+  } else {
+    nestBtn.textContent = '近くの巨大ネズミの巣について聞く';
+    nestBtn.onclick = () => {
+      _leaderMessage = 'ドワーフ「フロア2の壁に空いた穴の先に、巨大ネズミの巣があるらしい。見つけたら片付けてきてくれ。」';
+      render();
+    };
+  }
+  choices.appendChild(nestBtn);
+
+  const backBtn = document.createElement('button');
+  backBtn.textContent = '戻る';
+  backBtn.onclick = () => { leaderState.screen = 'main'; render(); };
   choices.appendChild(backBtn);
 }
 
@@ -3591,7 +3784,35 @@ function triggerPitTrap(trap){
 // モンスターとの強制戦闘（不意打ち）。倒すとtrap._resolved=trueになり以後は出現しない。
 // 逃走・敗北では解決済みにならないため、再訪すればまた同じ罠が発動する。
 function triggerMonsterEncounter(trap){
-  startCombat(trap.combatId, { count: trap.count, onWin: () => { trap._resolved = true; } });
+  startCombat(trap.combatId, {
+    count: trap.count,
+    onWin: () => {
+      trap._resolved = true;
+      if (dungeonData === DUNGEON_FLOORS[2.1]) checkRatNestCleared();
+    }
+  });
+}
+
+// フロア2-1の巨大ネズミの巣：4体すべての強制戦闘が解決済みになった瞬間に、
+// リスポーン計算用の日付を記録する（居住区リーダーへの報告可否・tickRatNestRespawn()参照）。
+function checkRatNestCleared(){
+  const fd = DUNGEON_FLOORS[2.1];
+  if (fd._nestClearedDay != null) return;
+  const allResolved = Object.values(fd.trapCells).every(t => t._resolved);
+  if (allResolved) fd._nestClearedDay = currentAbsDay();
+}
+
+// 巨大ネズミの巣は駆除から90日でリスポーンする（trapCellsの_resolvedを戻し、
+// 居住区リーダーへの報告済みフラグもリセットして再度依頼できるようにする）。
+const RAT_NEST_RESPAWN_DAYS = 90;
+function tickRatNestRespawn(){
+  const fd = DUNGEON_FLOORS[2.1];
+  if (fd._nestClearedDay == null) return;
+  if (currentAbsDay() - fd._nestClearedDay >= RAT_NEST_RESPAWN_DAYS) {
+    Object.values(fd.trapCells).forEach(t => { t._resolved = false; });
+    fd._nestClearedDay = null;
+    fd._nestReported = false;
+  }
 }
 
 // ── フロア3・4のワンダリングモンスター ──
@@ -3697,6 +3918,12 @@ function render() {
 
   if (sleepState) {
     renderSleepMenu();
+    renderMinimap();
+    return;
+  }
+
+  if (leaderState) {
+    renderLeaderDialog();
     renderMinimap();
     return;
   }
@@ -4032,6 +4259,10 @@ function handleAction(action) {
   }
   if (action === 'exile_sleep') {
     openSleepMenu('settlement');
+    return;
+  }
+  if (action === 'exile_talk_leader') {
+    openLeaderDialog();
     return;
   }
   alert(`アクション実行: ${action}\n（本来はゲーム内イベント処理を呼び出す）`);
