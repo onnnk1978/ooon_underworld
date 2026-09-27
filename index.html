@@ -188,9 +188,12 @@ body{display:flex;flex-direction:column;align-items:center;
   #cbt-log-wrap { min-height:60px; max-height:30vh; display:flex; flex-direction:column; border:1px solid #3a2010; border-radius:3px; background:#100806; }
   #cbt-log-header { flex-shrink:0; padding:4px 8px; border-bottom:1px solid #3a2010; font-size:calc(var(--font-sm) - 2px); color:#d8d0c0; }
   .cbt-log { flex:1; min-height:0; max-height:30vh; padding:6px 8px; font-size:var(--font-sm); line-height:2; color:#b8a890; overflow-y:auto; }
-  .choice-btn { background:#140e08; border:2px solid var(--border2); color:#f0ece0; font-family:system-ui,sans-serif; font-size:var(--font-base); padding:15px 13px; cursor:pointer; text-align:left; line-height:1.4; border-radius:4px; min-height:56px; flex:1 1 100%; }
-  .choice-btn:active { background:#1e1608; border-color:#f0ece0; color:var(--white2); }
-  .choice-btn::before { content:'▶ '; color:#f0ece0; }
+  /* #choices内のボタンは種類（部屋の選択肢・露店・睡眠メニュー・戦闘コマンド等）を問わず、
+     OOON同様すべて横幅いっぱいに広げて縦一列に並べる（1行1ボタン）。 */
+  #choices button, .choice-btn { background:#140e08; border:2px solid var(--border2); color:#f0ece0; font-family:system-ui,sans-serif; font-size:var(--font-base); padding:15px 13px; cursor:pointer; text-align:left; line-height:1.4; border-radius:4px; min-height:56px; flex:1 1 100%; width:100%; box-sizing:border-box; }
+  #choices button:active, .choice-btn:active { background:#1e1608; border-color:#f0ece0; color:var(--white2); }
+  #choices button::before, .choice-btn::before { content:'▶ '; color:#f0ece0; }
+  #choices button:disabled, .choice-btn:disabled { opacity:.5; cursor:not-allowed; }
   #minimap { margin-top:24px; }
   #minimap table { border-collapse: collapse; }
   #minimap td { width:20px; height:20px; text-align:center; font-size:11px; border:1px solid #222; }
