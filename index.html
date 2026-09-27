@@ -2737,6 +2737,25 @@ function pickDeadEndFlavor(){
   return DEAD_END_FLAVORS[Math.floor(Math.random() * DEAD_END_FLAVORS.length)];
 }
 
+// 直進通路で90度横（壁の方向）を向いた場合（facingWallFromStraight）用の
+// 汎用フレーバーテキスト。viewType自体はt_junction等に変わってしまうため、
+// pickGenericFlavor()とは別枠で扱う（render()参照）。
+const WALL_FACING_FLAVORS = [
+  '平坦な壁が目の前を遮っている。',
+  '切削された無機質な壁面が眼前まで迫っている。',
+  '隙間なく組み上げられた石壁が立ち塞がっている。',
+  '手を伸ばせば触れられる距離に、冷たい壁がそびえている。',
+  '荒々しい岩肌の壁が横手に広がっている。',
+  '一寸の狂いもなく積まれた石壁だ。',
+  '厚みのある重厚な壁が眼前を覆っている。',
+  '凹凸の少ない、均一な石の壁が伸びている。',
+  '堅固な壁面が行き手を阻むように佇んでいる。',
+  '風の通り抜けない、無音の壁面と向かい合っている。',
+];
+function pickWallFacingFlavor(){
+  return WALL_FACING_FLAVORS[Math.floor(Math.random() * WALL_FACING_FLAVORS.length)];
+}
+
 // 十字路（viewType==='cross_junction'）用の汎用フレーバーテキスト。
 const CROSS_JUNCTION_FLAVORS = [
   'ここは道が四方に交差する十字路だ。',
@@ -3090,15 +3109,16 @@ function render() {
       _dungeonMessage = null;
     } else {
       const dynText = dungeonData.dynamicFlavor ? dungeonData.dynamicFlavor(player.x, player.y) : null;
-      // 直進通路で横を向いた直後（画像は壁アップになる）は、実際のviewTypeが
-      // t_junction等に変わっていても、見た目通り「直進通路」の描写のままにする。
-      const flavorViewType = facingWallFromStraight ? 'straight' : viewType;
       if (dynText != null) {
         description.textContent = dynText;
       } else if (dungeonData.tileFlavor[posKey]) {
         description.textContent = dungeonData.tileFlavor[posKey];
+      } else if (facingWallFromStraight) {
+        // 直進通路で横を向いた直後（画像は壁アップになる）は、実際のviewTypeが
+        // t_junction等に変わっていても、見た目通り壁を向いた描写にする。
+        description.textContent = pickWallFacingFlavor();
       } else {
-        description.textContent = pickGenericFlavor(flavorViewType) || '';
+        description.textContent = pickGenericFlavor(viewType) || '';
       }
     }
 
