@@ -2802,8 +2802,8 @@ function sleepFor(hours){
   render();
 }
 
-// 居住地外での睡眠（通路移動中の「眠る」から呼ばれる）。フロア3では1時間経過するごとに
-// 16%の確率でワンダリングモンスターに襲われ、その場合は睡眠時間カウントが0になる
+// 居住地外での睡眠（通路移動中の「眠る」から呼ばれる）。フロア3・4では1時間経過する
+// ごとに16%の確率でワンダリングモンスターに襲われ、その場合は睡眠時間カウントが0になる
 // （体力回復・不眠ポイント減少とも一切発生せず、そのまま戦闘に突入する）。
 // 襲撃を受けた場合は運Lv1判定を行い、成功すれば物音で目を覚まし戦闘までに明かりを
 // つけられたものとして通常の戦闘になる。失敗すると明かりをつけるのに手間取り、
@@ -2820,8 +2820,8 @@ function sleepOutsideFor(hours){
     tickFoodDaily();
     if (_dungeonGameOverMessage) { render(); return; }
 
-    if (dungeonData.floor === 3 && Math.random() < FLOOR3_WANDERING_ENCOUNTER_CHANCE) {
-      const combatId = FLOOR3_WANDERING_MONSTERS[Math.floor(Math.random() * FLOOR3_WANDERING_MONSTERS.length)];
+    if (hasWanderingMonsters(dungeonData.floor) && Math.random() < WANDERING_ENCOUNTER_CHANCE) {
+      const combatId = WANDERING_MONSTERS[Math.floor(Math.random() * WANDERING_MONSTERS.length)];
       startDiceTest(player, 'lk', (result) => {
         startCombat(combatId);
         if (!result.success) {
@@ -3188,7 +3188,7 @@ function moveTo(x, y, facing){
     if (trap.type === 'monster') { triggerMonsterEncounter(trap); return; }
   }
 
-  if (maybeTriggerFloor3Wandering()) return;
+  if (maybeTriggerWandering()) return;
 
   render();
 }
@@ -3380,12 +3380,15 @@ function triggerMonsterEncounter(trap){
 }
 
 // ── フロア3のワンダリングモンスター ──
-// 1マス移動するたびに16%の確率で、以下の6種類からランダムに1体と遭遇する
-// （罠と違って_resolvedを持たないため、何度でも再遭遇しうる）。
-const FLOOR3_WANDERING_ENCOUNTER_CHANCE = 0.16;
-const FLOOR3_WANDERING_MONSTERS = [
+// フロア3・4で、1マス移動するたびに16%の確率で、以下の6種類からランダムに1体と
+// 遭遇する（罠と違って_resolvedを持たないため、何度でも再遭遇しうる）。
+const WANDERING_ENCOUNTER_CHANCE = 0.16;
+const WANDERING_MONSTERS = [
   'wander_spider', 'wander_centipede', 'wander_rat', 'wander_larva', 'wander_kobold', 'wander_goblin'
 ];
+function hasWanderingMonsters(floor){
+  return floor === 3 || floor === 4;
+}
 
 function _sumDice(n){
   let t = 0;
@@ -3406,10 +3409,10 @@ function rollTreasure(mr){
   return { amount, unit };
 }
 
-function maybeTriggerFloor3Wandering(){
-  if (dungeonData.floor !== 3) return false;
-  if (Math.random() >= FLOOR3_WANDERING_ENCOUNTER_CHANCE) return false;
-  const combatId = FLOOR3_WANDERING_MONSTERS[Math.floor(Math.random() * FLOOR3_WANDERING_MONSTERS.length)];
+function maybeTriggerWandering(){
+  if (!hasWanderingMonsters(dungeonData.floor)) return false;
+  if (Math.random() >= WANDERING_ENCOUNTER_CHANCE) return false;
+  const combatId = WANDERING_MONSTERS[Math.floor(Math.random() * WANDERING_MONSTERS.length)];
   startCombat(combatId);
   return true;
 }
