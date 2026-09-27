@@ -2866,8 +2866,8 @@ function sleepFor(hours){
   render();
 }
 
-// 居住地外での睡眠（通路移動中の「眠る」から呼ばれる）。フロア3では1時間経過するごとに
-// 16%の確率でワンダリングモンスターに襲われ、その場合は睡眠時間カウントが0になる
+// 居住地外での睡眠（通路移動中の「眠る」から呼ばれる）。フロア3・4では1時間経過する
+// ごとに16%の確率でワンダリングモンスターに襲われ、その場合は睡眠時間カウントが0になる
 // （体力回復・不眠ポイント減少とも一切発生せず、そのまま戦闘に突入する）。
 // 襲撃を受けた場合は運Lv1判定を行い、成功すれば物音で目を覚まし戦闘までに明かりを
 // つけられたものとして通常の戦闘になる。失敗すると明かりをつけるのに手間取り、
@@ -2884,10 +2884,11 @@ function sleepOutsideFor(hours){
     tickFoodDaily();
     if (_dungeonGameOverMessage) { render(); return; }
 
-    if (dungeonData.floor === 3 && Math.random() < FLOOR3_WANDERING_ENCOUNTER_CHANCE) {
-      const combatId = FLOOR3_WANDERING_MONSTERS[Math.floor(Math.random() * FLOOR3_WANDERING_MONSTERS.length)];
+    if (hasWanderingMonsters(dungeonData.floor) && Math.random() < WANDERING_ENCOUNTER_CHANCE) {
+      const combatId = WANDERING_MONSTERS[Math.floor(Math.random() * WANDERING_MONSTERS.length)];
+      const count = rollWanderingEnemyCount(dungeonData.floor);
       startDiceTest(player, 'lk', (result) => {
-        startCombat(combatId);
+        startCombat(combatId, { count });
         if (!result.success) {
           resolveCombatRound({ label: '無防備（松明に手間取る）', total: 0 });
           render();
@@ -3337,7 +3338,7 @@ function moveTo(x, y, facing){
     if (trap.type === 'monster') { triggerMonsterEncounter(trap); return; }
   }
 
-  if (maybeTriggerFloor3Wandering()) return;
+  if (maybeTriggerWandering()) return;
 
   render();
 }
@@ -3528,13 +3529,20 @@ function triggerMonsterEncounter(trap){
   startCombat(trap.combatId, { onWin: () => { trap._resolved = true; } });
 }
 
-// ── フロア3のワンダリングモンスター ──
-// 1マス移動するたびに16%の確率で、以下の6種類からランダムに1体と遭遇する
-// （罠と違って_resolvedを持たないため、何度でも再遭遇しうる）。
-const FLOOR3_WANDERING_ENCOUNTER_CHANCE = 0.16;
-const FLOOR3_WANDERING_MONSTERS = [
+// ── フロア3・4のワンダリングモンスター ──
+// 1マス移動するたびに16%の確率で、以下の6種類からランダムに1種と
+// 遭遇する（罠と違って_resolvedを持たないため、何度でも再遭遇しうる）。
+const WANDERING_ENCOUNTER_CHANCE = 0.16;
+const WANDERING_MONSTERS = [
   'wander_spider', 'wander_centipede', 'wander_rat', 'wander_larva', 'wander_kobold', 'wander_goblin'
 ];
+function hasWanderingMonsters(floor){
+  return floor === 3 || floor === 4;
+}
+// フロア3は従来通り1体のみ、フロア4は1〜2体でまとまって出現する。
+function rollWanderingEnemyCount(floor){
+  return floor === 4 ? (Math.random() < 0.5 ? 1 : 2) : 1;
+}
 
 function _sumDice(n){
   let t = 0;
@@ -3555,11 +3563,11 @@ function rollTreasure(mr){
   return { amount, unit };
 }
 
-function maybeTriggerFloor3Wandering(){
-  if (dungeonData.floor !== 3) return false;
-  if (Math.random() >= FLOOR3_WANDERING_ENCOUNTER_CHANCE) return false;
-  const combatId = FLOOR3_WANDERING_MONSTERS[Math.floor(Math.random() * FLOOR3_WANDERING_MONSTERS.length)];
-  startCombat(combatId);
+function maybeTriggerWandering(){
+  if (!hasWanderingMonsters(dungeonData.floor)) return false;
+  if (Math.random() >= WANDERING_ENCOUNTER_CHANCE) return false;
+  const combatId = WANDERING_MONSTERS[Math.floor(Math.random() * WANDERING_MONSTERS.length)];
+  startCombat(combatId, { count: rollWanderingEnemyCount(dungeonData.floor) });
   return true;
 }
 
@@ -3959,15 +3967,20 @@ function handleAction(action) {
 // ============================================================
 // onWin/onFlee: 勝利／逃走成功時に呼ばれるコールバック（部屋の解決フラグを立てる、罠を
 // 解決済みにする、など呼び出し元ごとに異なる後始末をここで行わせる）。
-function startCombat(combatId, { onWin, onFlee } = {}) {
+// count: def.enemiesを持たない単体モンスターを複数体出現させたい場合に指定する
+// （フロア4のワンダリングモンスターが1〜2体で出現する仕組みで使う。他は省略時=1体）。
+function startCombat(combatId, { onWin, onFlee, count } = {}) {
   const def = MONSTER_DEFS[combatId] || { name: combatId, mr: 10 };
-  const enemyDefs = def.enemies || [{ name: def.name, mr: def.mr }];
+  const enemyDefs = def.enemies
+    || (count > 1
+      ? Array.from({ length: count }, (_, i) => ({ name: `${def.name}(${i + 1})`, mr: def.mr }))
+      : [{ name: def.name, mr: def.mr }]);
   const enemies = enemyDefs.map(e => ({ name: e.name, mr: e.mr, curMR: e.mr, armor: e.armor || 0 }));
   combatState = {
     combatId, onWin, onFlee,
     enemies,
     totalMR: enemies.reduce((s, e) => s + e.mr, 0), // AP計算用（OOON本家のcs.totalMR相当）
-    log: [`${def.name}が現れた！`],
+    log: [`${def.name}が${enemies.length > 1 ? enemies.length + '体' : ''}現れた！`],
     playerDead: false,
     uiMode: 'action', // 'action' | 'spellSelect' | 'ttyfLevel'
     vorpalActive: false, // 鋭き刃の効果待ち（次の「戦う」で武器ダイス2倍）
