@@ -499,6 +499,12 @@ body{display:flex;flex-direction:column;align-items:center;
   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 装備 ──</div>
   <div id="sp-equip" style="margin-bottom:10px"></div>
 
+  <!-- 同行者（いるときだけ表示。renderStatusPanel()参照） -->
+  <div id="sp-companion-wrap" style="display:none">
+   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 同行者 ──</div>
+   <div id="sp-companion" style="margin-bottom:10px"></div>
+  </div>
+
   <!-- 死体（運んでいるときだけ表示。renderStatusPanel()参照） -->
   <div id="sp-corpse-wrap" style="display:none">
    <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 死体 ──</div>
@@ -1459,6 +1465,27 @@ function renderStatusPanel(){
   equippedRow('衣服', clothingItem, 'clothing') +
   invItemsHtml;
 
+ // 同行者（いるときだけ表示。装備の入れ替えは行わず現状把握のみ）
+ const companionWrap = document.getElementById('sp-companion-wrap');
+ if (player.companion) {
+  const c = player.companion;
+  const raceLabel = RACE_LABEL_JP[c.race] || c.race;
+  const typeLabel = TYPE_LABEL_JP[c.type] || c.type;
+  const cWeaponLabel = c.equipped.weapon ? formatWeaponDice(c.equipped.weapon) : '素手';
+  const cArmorLabel = `防護${getArmorValue(c)}`;
+  companionWrap.style.display = '';
+  document.getElementById('sp-companion').innerHTML = `
+   <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+     <span style="font-size:var(--font-sm);color:#f0ece0">${c.name}</span>
+     <span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">${raceLabel}・${typeLabel} Lv${c.level}</span>
+    </div>
+    <div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim)">体力 ${Math.max(c.con,0)}/${c.maxCon}　${cWeaponLabel}　${cArmorLabel}${c.con<=0?'　<span style="color:var(--red)">（戦闘不能）</span>':''}</div>
+   </div>`;
+ } else {
+  companionWrap.style.display = 'none';
+ }
+
  // 死体（運んでいるときだけ表示。食料と交換できない死体でも、ここから手放せる）
  const corpseIndex = (player.inventory || []).findIndex(i => i.type === 'corpse');
  const corpseWrap = document.getElementById('sp-corpse-wrap');
@@ -2387,6 +2414,7 @@ const rooms = {
     settlementChoices: [
       { label: "露店を利用する", action: "exile_shop" },
       { label: "リーダーと話す", action: "exile_talk_leader" },
+      { label: "同行者を探す", action: "exile_find_companion" },
       { label: "寝る", action: "exile_sleep" }
     ]
   }
@@ -2741,10 +2769,12 @@ function levelFromAP(ap){
   return level;
 }
 
-// APを加算し、レベルが上がっていればプレイヤー本人に限り能力値上昇選択パネルを
-// 表示する（OOON本家のgainAP()/gainAPFor()と同じくAPの加算とレベル判定を一箇所に
-// まとめる。pc省略時はplayer。閾値を一気に複数またいでもOOON本家と同じく
-// パネルは1回だけ、上昇量は新しいレベル基準で計算する）。
+// APを加算し、レベルが上がっていれば能力値上昇選択パネルを表示する（OOON本家の
+// gainAP()/gainAPFor()と同じくAPの加算とレベル判定を一箇所にまとめる）。
+// pc省略時はplayer。対象がplayerまたはplayer.companion（同行者）の場合のみパネルを
+// 表示する（それ以外＝チャラ作成中の_pendingPCなどはレベルアップUIを出さない）。
+// 閾値を一気に複数またいでもOOON本家と同じくパネルは1回だけ、上昇量は新しいレベル
+// 基準で計算する。
 function gainAP(amount, pc){
   pc = pc || player;
   if (!pc) return;
@@ -2752,46 +2782,51 @@ function gainAP(amount, pc){
   const newLevel = levelFromAP(pc.ap);
   const oldLevel = pc.level || 1;
   pc.level = newLevel;
-  if (pc === player && newLevel > oldLevel) queueLevelUp(oldLevel, newLevel);
+  const isTrackedActor = pc === player || (player && pc === player.companion);
+  if (isTrackedActor && newLevel > oldLevel) queueLevelUp(oldLevel, newLevel, pc);
 }
 
 // ── レベルアップ時の能力値上昇選択（OOON本家 showLevelUpPanel() 準拠）。──
-// 本作はプレイヤー1人のみのため、OOON本家のNPC分岐・戦闘継続再開は不要。
-// 知力・器用さの永続増加は、不眠ペナルティの基準値（_baseIq/_baseDex）にも
-// 反映する必要がある（強さ・体力のmaxSt/maxConと同様。反映しないと不眠ペナルティが
-// 上昇分を無視した古い基準で計算され続けてしまう）。
+// プレイヤー・同行者どちらがレベルアップした場合も同じパネルを使う（OOON本家の
+// PC/NPC共用パネルに相当。両者が同時にレベルアップした場合はキューに積んで1人ずつ
+// 順番に表示する）。知力・器用さの永続増加は、不眠ペナルティの基準値
+// （_baseIq/_baseDex。プレイヤーのみが持つ）にも反映する必要がある
+// （強さ・体力のmaxSt/maxConと同様。反映しないと不眠ペナルティが上昇分を無視した
+// 古い基準で計算され続けてしまう）。
 let _levelUpActive = false;
-let _levelUpQueue = []; // 複数レベル分一気に上がった場合はここに積む（通常は発生しない）
-function queueLevelUp(oldLevel, newLevel){
+let _levelUpQueue = []; // 複数レベル分・複数人が同時に上がった場合はここに積む
+function queueLevelUp(oldLevel, newLevel, pc){
   if (_levelUpActive) {
-    _levelUpQueue.push({ oldLevel, newLevel });
+    _levelUpQueue.push({ oldLevel, newLevel, pc });
   } else {
     _levelUpActive = true;
-    showLevelUpPanel(oldLevel, newLevel);
+    showLevelUpPanel(oldLevel, newLevel, pc);
   }
 }
 function _processLevelUpQueue(){
   if (_levelUpQueue.length === 0) { _levelUpActive = false; return; }
   const next = _levelUpQueue.shift();
-  showLevelUpPanel(next.oldLevel, next.newLevel);
+  showLevelUpPanel(next.oldLevel, next.newLevel, next.pc);
 }
-function showLevelUpPanel(oldLevel, newLevel){
+function showLevelUpPanel(oldLevel, newLevel, pc){
+  pc = pc || player;
+  const isPlayer = pc === player;
   const lv = newLevel;
   const half = Math.floor(lv / 2);
   const opts = [
-    { label: `A. 強さ + ${lv}`, fn: () => { player.st += lv; player.maxSt = (player.maxSt || player.st) + lv; } },
-    { label: `B. 知力 + ${half}`, fn: () => { player.iq += half; player._baseIq = (player._baseIq || player.iq) + half; } },
-    { label: `C. 運 + ${lv * 2}`, fn: () => { player.lk += lv * 2; } },
-    { label: `D. 体力 + ${lv}`, fn: () => { player.con += lv; player.maxCon = (player.maxCon || player.con) + lv; } },
-    { label: `E. 器用さ + ${half}`, fn: () => { player.dex += half; player._baseDex = (player._baseDex || player.dex) + half; } },
-    { label: `F. 魅力 + ${half}`, fn: () => { player.chr += half; } },
+    { label: `A. 強さ + ${lv}`, fn: () => { pc.st += lv; pc.maxSt = (pc.maxSt || pc.st) + lv; } },
+    { label: `B. 知力 + ${half}`, fn: () => { pc.iq += half; if (isPlayer) pc._baseIq = (pc._baseIq || pc.iq) + half; } },
+    { label: `C. 運 + ${lv * 2}`, fn: () => { pc.lk += lv * 2; } },
+    { label: `D. 体力 + ${lv}`, fn: () => { pc.con += lv; pc.maxCon = (pc.maxCon || pc.con) + lv; } },
+    { label: `E. 器用さ + ${half}`, fn: () => { pc.dex += half; if (isPlayer) pc._baseDex = (pc._baseDex || pc.dex) + half; } },
+    { label: `F. 魅力 + ${half}`, fn: () => { pc.chr += half; } },
     { label: `G. 強さ + ${half} / 体力 + ${half}`, fn: () => {
-        player.st += half; player.maxSt = (player.maxSt || player.st) + half;
-        player.con += half; player.maxCon = (player.maxCon || player.con) + half;
+        pc.st += half; pc.maxSt = (pc.maxSt || pc.st) + half;
+        pc.con += half; pc.maxCon = (pc.maxCon || pc.con) + half;
       } },
   ];
 
-  document.getElementById('lu-title').textContent = `⬆ Lv${oldLevel} → Lv${newLevel}`;
+  document.getElementById('lu-title').textContent = `⬆ ${isPlayer ? 'あなた' : pc.name} Lv${oldLevel} → Lv${newLevel}`;
   const el = document.getElementById('lu-options');
   el.innerHTML = '';
   opts.forEach(opt => {
@@ -3599,6 +3634,146 @@ function renderLeaderQuests(){
   choices.appendChild(backBtn);
 }
 
+// ── 同行者（NPC）システム（OOON本家のパーティ機能を簡略移植）。──
+// 本作のパーティはPC+NPC1名の二人組限定（OOON本家は最大3人）。同行者の戦闘計算は
+// プレイヤーと同じ形状（equipped.weapon/armor）に揃えることで、playerCombatRoll()/
+// getArmorValue()をそのまま使い回す（OOON本家のcalcNPCRoll()/calcNPCArmor()相当を
+// 別途実装しない）。装備の入れ替え・魔法・遠距離攻撃など、単独では使わない
+// OOON本家機能は本作の同行者では省略する。
+const COMPANION_RACES = ['human', 'human', 'human', 'elf', 'dwarf', 'halfling', 'fairy', 'leprechaun'];
+const COMPANION_TYPES = ['warrior', 'warrior', 'rogue', 'wizard'];
+// Lv1同行者の初期装備（OOON本家generateNPC()のLv1装備テーブル準拠。魔法使いは丸腰）。
+const COMPANION_LV1_WEAPON = { type: 'weapon', name: 'ショートソード', dice: 3, adds: 0, stReq: 7, dexReq: 3, weight: 30, twoHand: false };
+const COMPANION_LV1_ARMOR = { type: 'armor', name: '布製の鎧', hits: 3, stReq: 1, weight: 100 };
+function generateCompanionCandidate(){
+  const race = COMPANION_RACES[Math.floor(Math.random() * COMPANION_RACES.length)];
+  const type = COMPANION_TYPES[Math.floor(Math.random() * COMPANION_TYPES.length)];
+  const name = NPC_NAMES[Math.floor(Math.random() * NPC_NAMES.length)];
+  const base = { st: Nd6(3), iq: Nd6(3), lk: Nd6(3), con: Nd6(3), dex: Nd6(3), chr: Nd6(3), spd: Nd6(3) };
+  const applied = applyRace(base, race);
+  const npc = { name, race, type, level: 1, ap: 0, ...applied };
+  npc.maxSt = npc.st;
+  npc.maxCon = npc.con;
+  npc.equipped = {
+    weapon: type === 'wizard' ? null : { ...COMPANION_LV1_WEAPON },
+    armor: { ...COMPANION_LV1_ARMOR },
+  };
+  return npc;
+}
+
+// 追放者の居住区で出会える同行者候補プール（1日ごとに3人生成し直す。OOON本家の
+// 酒場NPCプール＝getTavernNPCs()の日替わりキャッシュに相当）。プレイヤーに紐づけて
+// 保存する（player._companionPool/_companionPoolDay/_companionInvited）ことで、
+// セーブ/ロードでも当日分のプールと勧誘済み状態がそのまま復元される。
+function getCompanionPool(){
+  const today = currentAbsDay();
+  if (player._companionPoolDay !== today) {
+    player._companionPoolDay = today;
+    player._companionPool = [generateCompanionCandidate(), generateCompanionCandidate(), generateCompanionCandidate()];
+    player._companionInvited = {};
+  }
+  return player._companionPool;
+}
+
+let companionState = null; // nullなら非表示。{}なら同行者探しの画面を表示中（render()参照）
+// 同行者探し画面で一度だけ表示するメッセージ（renderCompanionDialog()が読んだら即座にクリアする）。
+let _companionMessage = null;
+function openCompanionDialog(){
+  companionState = {};
+  render();
+}
+function closeCompanionDialog(){
+  companionState = null;
+  render();
+}
+
+// 声をかけたNPCを魅力の能力値テスト（Lv1固定。同行者プールが全員Lv1のため）で勧誘する。
+// 成功すれば同行者になり、失敗しても同じ相手には（プールが入れ替わるまで）再挑戦できない
+// （OOON本家のPC._recruitedSlotsに相当。player._companionInvitedで管理）。
+function tryRecruitCompanion(idx){
+  const pool = getCompanionPool();
+  const npc = pool[idx];
+  if (!npc) return;
+  player._companionInvited = player._companionInvited || {};
+  if (player._companionInvited[idx]) return;
+  player._companionInvited[idx] = true;
+  startDiceTest(player, 'chr', (result) => {
+    if (result.success) {
+      player.companion = npc;
+      _companionMessage = `${npc.name}「わかった、一緒に行こう」`;
+    } else {
+      _companionMessage = `${npc.name}「悪いが、遠慮しておくよ」`;
+    }
+    render();
+  }, { inline: true, level: 1 });
+}
+
+function dismissCompanion(){
+  const c = player.companion;
+  if (!c) return;
+  player.companion = null;
+  _companionMessage = `${c.name}と別れた。`;
+  render();
+}
+
+function renderCompanionDialog(){
+  const viewArea = document.getElementById('viewArea');
+  const debugInfo = document.getElementById('debugInfo');
+  const description = document.getElementById('description');
+  const combatArea = document.getElementById('combatArea');
+  const shopList = document.getElementById('shop-list');
+  const choices = document.getElementById('choices');
+  choices.innerHTML = '';
+
+  viewArea.classList.remove('hidden');
+  debugInfo.classList.remove('hidden');
+  description.classList.remove('hidden');
+  combatArea.classList.add('hidden');
+  shopList.classList.add('hidden');
+  shopList.innerHTML = '';
+
+  viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('room_exile_settlement.webp')
+    ? imageOrPlaceholder('room_exile_settlement.webp', '居住区')
+    : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_settlement.webp 未用意]</div>`;
+  debugInfo.textContent = '';
+
+  if (player.companion) {
+    const c = player.companion;
+    const raceLabel = RACE_LABEL_JP[c.race] || c.race;
+    const typeLabel = TYPE_LABEL_JP[c.type] || c.type;
+    description.textContent = _companionMessage
+      || `${c.name}（${raceLabel}・${typeLabel} Lv${c.level}）が同行している。体力 ${Math.max(c.con, 0)}/${c.maxCon}`;
+    _companionMessage = null;
+
+    const dismissBtn = document.createElement('button');
+    dismissBtn.textContent = `${c.name}と別れる`;
+    dismissBtn.onclick = () => dismissCompanion();
+    choices.appendChild(dismissBtn);
+  } else {
+    const pool = getCompanionPool();
+    description.textContent = _companionMessage || '広場で何人かが仕事を探しているようだ。声をかけてみるか。';
+    _companionMessage = null;
+
+    pool.forEach((npc, idx) => {
+      const invited = !!(player._companionInvited && player._companionInvited[idx]);
+      const raceLabel = RACE_LABEL_JP[npc.race] || npc.race;
+      const typeLabel = TYPE_LABEL_JP[npc.type] || npc.type;
+      const btn = document.createElement('button');
+      btn.textContent = invited
+        ? `${npc.name}（${raceLabel}・${typeLabel} Lv${npc.level}）── 話は聞いてもらえなかった`
+        : `${npc.name}（${raceLabel}・${typeLabel} Lv${npc.level}）に声をかける`;
+      btn.disabled = invited;
+      btn.onclick = () => tryRecruitCompanion(idx);
+      choices.appendChild(btn);
+    });
+  }
+
+  const backBtn = document.createElement('button');
+  backBtn.textContent = '出る';
+  backBtn.onclick = () => closeCompanionDialog();
+  choices.appendChild(backBtn);
+}
+
 // ── 睡眠時間選択画面（居住区の「寝る」・通路の「眠る」から開く） ──
 // mode: 'settlement'（居住地内・中断なし）または'outside'（居住地外・中断の可能性あり）
 function openSleepMenu(mode){
@@ -4004,6 +4179,12 @@ function render() {
     return;
   }
 
+  if (companionState) {
+    renderCompanionDialog();
+    renderMinimap();
+    return;
+  }
+
   const currentRoomId = roomIdAt(player.x, player.y);
   const posKey = `${player.x},${player.y}`;
   const stairsLink = dungeonData.stairsLinks && dungeonData.stairsLinks[posKey];
@@ -4341,6 +4522,10 @@ function handleAction(action) {
     openLeaderDialog();
     return;
   }
+  if (action === 'exile_find_companion') {
+    openCompanionDialog();
+    return;
+  }
   alert(`アクション実行: ${action}\n（本来はゲーム内イベント処理を呼び出す）`);
 }
 
@@ -4392,6 +4577,19 @@ function resolveCombatRound(pcAction){
     logHeader = `― プレイヤー(${pRoll.weaponName}${vorpal ? '・鋭き刃でダイス2倍' : ''}): ${pRoll.diceCount}D6=${pRoll.diceTotal}+加算${pAddsTotal >= 0 ? '+' : ''}${pAddsTotal} = ${pRoll.total}`;
   }
 
+  // 同行者がいて生存していれば、そのロールをパーティ合計に加算する（OOON本家の
+  // NPCパーティ攻撃合算に相当）。同行者は魔法・遠距離攻撃を持たないため、常に
+  // playerCombatRoll()と同じ近接ロールで参戦する。
+  const companion = player.companion;
+  const companionAlive = companion && companion.con > 0;
+  let cRoll = null;
+  if (companionAlive) {
+    cRoll = playerCombatRoll(companion);
+    const cAddsTotal = cRoll.weaponAdds + cRoll.statAdds;
+    logHeader += `／${companion.name}(${cRoll.weaponName}): ${cRoll.diceCount}D6=${cRoll.diceTotal}+加算${cAddsTotal >= 0 ? '+' : ''}${cAddsTotal} = ${cRoll.total}`;
+  }
+  const partyTotal = pRoll.total + (cRoll ? cRoll.total : 0);
+
   const aliveEnemies = cs.enemies.filter(e => e.curMR > 0);
   const eRolls = aliveEnemies.map(e => ({ enemy: e, roll: monsterRoll(e.curMR) }));
   const eTotal = eRolls.reduce((s, r) => s + r.roll.total, 0);
@@ -4399,8 +4597,8 @@ function resolveCombatRound(pcAction){
   const eDetail = eRolls.map(r => `${r.enemy.name}:${r.roll.diceCount}D6+${r.roll.flatBonus}=${r.roll.total}`).join('／');
   cs.log.push(`${logHeader}／${eDetail} → 敵合計${eTotal}`);
 
-  if (pRoll.total > eTotal) {
-    const totalDmg = pRoll.total - eTotal;
+  if (partyTotal > eTotal) {
+    const totalDmg = partyTotal - eTotal;
     const perEnemy = Math.floor(totalDmg / aliveEnemies.length);
     const remainder = totalDmg % aliveEnemies.length;
     aliveEnemies.forEach((e, i) => {
@@ -4409,12 +4607,30 @@ function resolveCombatRound(pcAction){
       e.curMR = Math.max(0, e.curMR - actualDmg);
       cs.log.push(`${e.name}に${actualDmg}ダメージ！（残りMR ${e.curMR}/${e.mr}）`);
     });
-  } else if (eTotal > pRoll.total) {
-    const rawDmg = eTotal - pRoll.total;
-    const armor = getArmorValue(player) * (pcAction && pcAction.defending ? 2 : 1);
-    const dmg = Math.max(0, rawDmg - armor);
-    player.con -= dmg;
-    cs.log.push(`敵の反撃！ ${dmg}ダメージを受けた${armor > 0 ? `（防具で${Math.min(rawDmg,armor)}軽減）` : ''}（残りHP ${Math.max(player.con,0)}/${player.maxCon}）`);
+  } else if (eTotal > partyTotal) {
+    const rawDmg = eTotal - partyTotal;
+    if (!companionAlive) {
+      const armor = getArmorValue(player) * (pcAction && pcAction.defending ? 2 : 1);
+      const dmg = Math.max(0, rawDmg - armor);
+      player.con -= dmg;
+      cs.log.push(`敵の反撃！ ${dmg}ダメージを受けた${armor > 0 ? `（防具で${Math.min(rawDmg,armor)}軽減）` : ''}（残りHP ${Math.max(player.con,0)}/${player.maxCon}）`);
+    } else {
+      // パーティ（あなた＋同行者）で受けたダメージを2人で分担する（OOON本家の
+      // resolveRound()の味方ダメージ分担ロジックに相当）。
+      const targets = [
+        { pc: player, armor: getArmorValue(player) * (pcAction && pcAction.defending ? 2 : 1), label: 'あなた' },
+        { pc: companion, armor: getArmorValue(companion), label: companion.name },
+      ];
+      const perTarget = Math.floor(rawDmg / targets.length);
+      const remainder = rawDmg % targets.length;
+      cs.log.push(`敵の反撃！ ${rawDmg}ダメージ（あなたと${companion.name}で分担）`);
+      targets.forEach(({ pc, armor, label }, i) => {
+        const dmgToThis = perTarget + (i === 0 ? remainder : 0);
+        const dmg = Math.max(0, dmgToThis - armor);
+        pc.con = Math.max(0, pc.con - dmg);
+        cs.log.push(`　→ ${label}: -${dmg}ダメージ（残りHP ${pc.con}/${pc.maxCon}）${pc.con <= 0 && pc !== player ? `　${label}は倒れた！` : ''}`);
+      });
+    }
   } else {
     cs.log.push('痛み分け（ダメージなし）');
   }
@@ -4436,19 +4652,37 @@ function resolveCombatRound(pcAction){
 // 敵が即死した場合の両方から呼ばれる共通処理。
 function _grantCombatVictory(){
   const cs = combatState;
-  const apGain = Math.max(1, cs.totalMR); // 生存メンバー数=1（ソロ）
+  const companion = player.companion;
+  const companionAlive = companion && companion.con > 0;
+  const memberCount = companionAlive ? 2 : 1;
+  // 頭数で分け合う（OOON本家gainAPCombat()準拠）。パーティを組んでいると、
+  // ソロの時より1回の戦闘で得られる経験値そのものは少なくなる代わりに、
+  // 同行者の攻撃力の分だけ勝ちやすくなる。
+  const apGain = Math.max(1, Math.floor(cs.totalMR / memberCount));
   const oldLevel = player.level;
   gainAP(apGain);
-  cs.log.push(`${cs.enemies.map(e => e.name).join('・')}を倒した！ AP+${apGain}（累計${player.ap}）`);
+  if (companionAlive) {
+    const companionOldLevel = companion.level;
+    gainAP(apGain, companion);
+    cs.log.push(`${cs.enemies.map(e => e.name).join('・')}を倒した！ AP+${apGain}（あなた・${companion.name}それぞれが獲得）`);
+    if (companion.level > companionOldLevel) cs.log.push(`${companion.name}のレベルが${companion.level}に上がった！`);
+  } else {
+    cs.log.push(`${cs.enemies.map(e => e.name).join('・')}を倒した！ AP+${apGain}（累計${player.ap}）`);
+  }
   if (player.level > oldLevel) cs.log.push(`レベルが${player.level}に上がった！`);
 
-  // 標準宝物生成（OOON本家の宝物作成表準拠、rollTreasure()参照）。全ての戦闘勝利で共通。
+  // 標準宝物生成（OOON本家の宝物作成表準拠、rollTreasure()参照）。パーティを組んでいる
+  // 場合は頭数で分割する（同行者は自分の財布を持たないため、実際に加算するのは
+  // あなたの取り分のみ。OOON本家のcollectCoins()のパーティ等分配に相当）。
   const treasure = rollTreasure(cs.totalMR);
   if (treasure.amount > 0) {
-    if (treasure.unit === 'CP') gainCP(treasure.amount);
-    else if (treasure.unit === 'SP') gainSP(treasure.amount);
-    else gainGP(treasure.amount);
-    cs.log.push(`宝物として${treasure.amount}${treasure.unit}を手に入れた！`);
+    const share = companionAlive ? Math.max(1, Math.floor(treasure.amount / 2)) : treasure.amount;
+    if (treasure.unit === 'CP') gainCP(share);
+    else if (treasure.unit === 'SP') gainSP(share);
+    else gainGP(share);
+    cs.log.push(companionAlive
+      ? `宝物として${treasure.amount}${treasure.unit}を見つけた。${companion.name}と分け合い、あなたの取り分は${share}${treasure.unit}。`
+      : `宝物として${treasure.amount}${treasure.unit}を手に入れた！`);
   }
 
   // 死体は一つしか持ち運べない（複数体を倒した場合は先頭の敵の死体を対象にする）。
