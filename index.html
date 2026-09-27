@@ -1610,6 +1610,52 @@ function updateContinueButtonState(){
  if (btn) btn.disabled = !hasAnySaveData();
 }
 
+// ── セーブデータの書き出し／読み込み（OOON本家の同機能に準拠） ──
+// 書き出しは対象スロットのJSONをそのままファイルダウンロードする。
+// 読み込みはファイルを選択すると_saveFileImportTargetSlotに指定したスロットへ上書きする
+// （showSaveSlotUI()内の「読込」ボタンから呼ばれる。空きスロットへの読み込みも同じボタンで行える）。
+let _saveFileImportTargetSlot = null;
+
+function exportSaveSlot(slot){
+ const raw = localStorage.getItem(getSaveKey(slot));
+ if (!raw) return;
+ const info = getSlotInfo(slot);
+ const now = new Date();
+ const pad = n => String(n).padStart(2, '0');
+ const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+ const filename = `ooon_underworld_save_slot${slot}_${info ? info.name : 'unknown'}_${timestamp}.json`;
+ const blob = new Blob([raw], { type: 'application/json' });
+ const url = URL.createObjectURL(blob);
+ const a = document.createElement('a');
+ a.href = url;
+ a.download = filename;
+ a.click();
+ URL.revokeObjectURL(url);
+ showSaveToast(`${filename} をダウンロードしました`);
+}
+
+function _handleSaveFileImport(e, mode){
+ const file = e.target.files[0];
+ if (!file) return;
+ const reader = new FileReader();
+ reader.onload = (ev) => {
+  try {
+   const data = JSON.parse(ev.target.result);
+   if (!data.player || !data.gameTime) throw new Error('形式が不正です');
+   localStorage.setItem(getSaveKey(_saveFileImportTargetSlot), JSON.stringify(data));
+   showSaveToast(`スロット${_saveFileImportTargetSlot}に読み込みました`);
+  } catch (err) {
+   showSaveToast(`読み込み失敗：${err.message}`);
+  }
+  e.target.value = '';
+  const panel = document.getElementById('save-slot-panel');
+  if (panel) panel.remove();
+  showSaveSlotUI(mode);
+  updateContinueButtonState();
+ };
+ reader.readAsText(file);
+}
+
 // セーブ／ロード共通のスロット選択パネル（動的生成。OOON本家 showSaveSlotUI() 相当）。
 function showSaveSlotUI(mode){
  const existing = document.getElementById('save-slot-panel');
@@ -1657,6 +1703,29 @@ function showSaveSlotUI(mode){
    }
   };
   panel.appendChild(row);
+
+  // セーブデータの書き出し（ファイルダウンロード）／読み込み（ファイル選択→このスロットへ
+  // 上書き）。OOON本家のセーブデータ書き出し／読み込み機能に準拠（クリックしても
+  // 上の行のセーブ/ロードは発火しないようstopPropagationする）。
+  const transferRow = document.createElement('div');
+  transferRow.style.cssText = 'display:flex;gap:6px;margin:2px 0 8px';
+  const exportBtn = document.createElement('button');
+  exportBtn.textContent = '書き出し';
+  exportBtn.disabled = !info;
+  exportBtn.style.cssText = `flex:1;background:var(--panel2);border:1px solid var(--border);color:var(--dim);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 2px);padding:6px;cursor:${info ? 'pointer' : 'default'};border-radius:2px;opacity:${info ? '1' : '.5'}`;
+  exportBtn.onclick = (e) => { e.stopPropagation(); exportSaveSlot(s); };
+  const importBtn = document.createElement('button');
+  importBtn.textContent = '読込';
+  importBtn.style.cssText = 'flex:1;background:var(--panel2);border:1px solid var(--border);color:var(--dim);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 2px);padding:6px;cursor:pointer;border-radius:2px';
+  importBtn.onclick = (e) => {
+   e.stopPropagation();
+   if (info && !confirm(`スロット${s}（${info.name}）にファイルの内容を上書きします。よろしいですか？`)) return;
+   _saveFileImportTargetSlot = s;
+   document.getElementById('save-slot-file-input').click();
+  };
+  transferRow.appendChild(exportBtn);
+  transferRow.appendChild(importBtn);
+  panel.appendChild(transferRow);
  }
 
  const cancelBtn = document.createElement('button');
@@ -1664,6 +1733,14 @@ function showSaveSlotUI(mode){
  cancelBtn.style.cssText = 'margin-top:8px;width:100%;background:none;border:1px solid var(--border);color:var(--dim);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 2px);padding:8px;cursor:pointer;border-radius:3px';
  cancelBtn.onclick = () => panel.remove();
  panel.appendChild(cancelBtn);
+
+ const fileInput = document.createElement('input');
+ fileInput.type = 'file';
+ fileInput.accept = '.json';
+ fileInput.id = 'save-slot-file-input';
+ fileInput.style.display = 'none';
+ fileInput.onchange = (e) => _handleSaveFileImport(e, mode);
+ panel.appendChild(fileInput);
 
  document.body.appendChild(panel);
 }
