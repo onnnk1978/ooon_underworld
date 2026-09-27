@@ -916,8 +916,11 @@ function buildCharacter(){
  pc._baseIq = pc.iq;
  pc._baseDex = pc.dex;
  pc.gold = 0;
+ pc.sp = 0;
+ pc.cp = 0;
  pc.ap = 0;
  pc.level = 1;
+ pc.torchRemainingMinutes = 0;
 
  // ダンジョンクローラー向けの汎用インベントリ枠（中身はOOONの装備システムに準拠しなくてよい）
  pc.inventory = [];
@@ -1321,7 +1324,7 @@ function renderStatusPanel(){
  const food = player._food || 0;
  const foodColor = food > 15 ? 'var(--white)' : food > 5 ? '#e0c860' : food > 0 ? '#e0c860' : 'var(--red)';
  document.getElementById('sp-adv').innerHTML = [
-  ['所持金', player.gold + 'GP', 'var(--gold)'],
+  ['所持金', formatMoney(player), 'var(--gold)'],
   ['経験値', player.ap, 'var(--gold)'],
   ['LV', player.level, 'var(--gold)'],
   ['食料', `${food}日分`, foodColor],
@@ -1689,9 +1692,11 @@ function formatGameDateTime(){
 
 // 時計をminutes分だけ進める（省略時はMINUTES_PER_STEP＝1歩分）。
 function advanceGameTime(minutes){
- GAME_TIME.totalMinutes += (minutes != null ? minutes : MINUTES_PER_STEP);
+ const m = minutes != null ? minutes : MINUTES_PER_STEP;
+ GAME_TIME.totalMinutes += m;
  tickFoodDaily();
  tickInsomnia();
+ tickTorch(m);
 }
 
 // ============================================================
@@ -2562,7 +2567,15 @@ function sleepFor(hours){
 // 居住地外での睡眠（通路移動中の「眠る」から呼ばれる）。フロア3では1時間経過するごとに
 // 16%の確率でワンダリングモンスターに襲われ、その場合は睡眠時間カウントが0になる
 // （体力回復・不眠ポイント減少とも一切発生せず、そのまま戦闘に突入する）。
+// 襲撃を受けた場合は運Lv1判定を行い、成功すれば物音で目を覚まし戦闘までに明かりを
+// つけられたものとして通常の戦闘になる。失敗すると明かりをつけるのに手間取り、
+// 戦闘開始直後の1ターンだけ反撃できないまま敵の攻撃を受ける（防具点は有効）。
 function sleepOutsideFor(hours){
+  // 野宿は松明の明かりを頼りに休むため、どんな睡眠時間でも1本消費する
+  // （松明1本の燃焼時間100分は最短の睡眠時間より短いため、消費は1本で足りる）。
+  const torchIdx = (player.inventory || []).findIndex(i => i.name === '松明');
+  if (torchIdx !== -1) player.inventory.splice(torchIdx, 1);
+
   const rate6h = hasBedding() ? SLEEP_HP_RECOVERY_PER_6H.outsideWithBedding : SLEEP_HP_RECOVERY_PER_6H.outsideNoBedding;
   for (let h = 0; h < hours; h++) {
     GAME_TIME.totalMinutes += 60;
@@ -2571,7 +2584,13 @@ function sleepOutsideFor(hours){
 
     if (dungeonData.floor === 3 && Math.random() < FLOOR3_WANDERING_ENCOUNTER_CHANCE) {
       const combatId = FLOOR3_WANDERING_MONSTERS[Math.floor(Math.random() * FLOOR3_WANDERING_MONSTERS.length)];
-      startCombat(combatId);
+      startDiceTest(player, 'lk', (result) => {
+        startCombat(combatId);
+        if (!result.success) {
+          resolveCombatRound({ label: '無防備（松明に手間取る）', total: 0 });
+          render();
+        }
+      }, { inline: true, level: 1 });
       return;
     }
   }
@@ -2610,8 +2629,79 @@ function handleExileGateChoice(choice){
   handleAction(choice.action);
 }
 
+// ── 通貨（OOON本家準拠：GP/SP/CP、1GP=10SP=100CP）──
+// GP/SP/CPはそれぞれ独立した枚数として管理する（gainGP/gainSP/gainCPは自動繰り上げしない）。
+// 支払い時（payCP）だけCP→SP→GPの順に崩して不足分を補い、崩した残りはお釣りとしてCPに戻す。
+function totalCP(pc){
+  pc = pc || player;
+  return (pc.gold || 0) * 100 + (pc.sp || 0) * 10 + (pc.cp || 0);
+}
+function payCP(amount, pc){
+  pc = pc || player;
+  amount = Math.floor(amount);
+  if (totalCP(pc) < amount) return false;
+  let rem = amount;
+  let cp = pc.cp || 0, sp = pc.sp || 0, gold = pc.gold || 0;
+  if (cp >= rem) { cp -= rem; rem = 0; }
+  else { rem -= cp; cp = 0; }
+  if (rem > 0) {
+    if (sp >= Math.ceil(rem / 10)) {
+      const spUsed = Math.ceil(rem / 10);
+      cp += spUsed * 10 - rem;
+      sp -= spUsed; rem = 0;
+    } else {
+      rem -= sp * 10; cp += sp * 10; sp = 0;
+    }
+  }
+  if (rem > 0) {
+    const gpUsed = Math.ceil(rem / 100);
+    cp += gpUsed * 100 - rem;
+    gold -= gpUsed; rem = 0;
+  }
+  pc.gold = gold; pc.sp = sp; pc.cp = cp;
+  return true;
+}
+function gainGP(amount, pc){ pc = pc || player; pc.gold = (pc.gold || 0) + Math.floor(amount); }
+function gainSP(amount, pc){ pc = pc || player; pc.sp = (pc.sp || 0) + Math.floor(amount); }
+function gainCP(amount, pc){ pc = pc || player; pc.cp = (pc.cp || 0) + Math.floor(amount); }
+function formatMoney(pc){
+  pc = pc || player;
+  const parts = [];
+  if (pc.gold) parts.push(`${pc.gold}GP`);
+  if (pc.sp) parts.push(`${pc.sp}SP`);
+  if (pc.cp) parts.push(`${pc.cp}CP`);
+  return parts.length ? parts.join(' ') : '0CP';
+}
+// アイテムのcost（GP単位の小数）を表示用文字列に変換する。例: 1→"1GP" / 0.1→"1SP" / 0.01→"1CP"
+function formatItemCost(costGP){
+  const cp = Math.round(costGP * 100);
+  if (cp === 0) return '0CP';
+  if (cp % 100 === 0) return `${cp / 100}GP`;
+  if (cp % 10 === 0) return `${cp / 10}SP`;
+  return `${cp}CP`;
+}
+
+// 松明1本の燃焼時間（分）。フロア4以降はこれが尽きると周囲が把握できなくなる。
+const TORCH_BURN_MINUTES = 100;
+function hasTorchLit(){
+  return (player.torchRemainingMinutes || 0) > 0;
+}
+// フロア4以降でのみ松明の燃焼時間を消費する（フロア3以前は光源を必要としないため）。
+// 燃焼時間が尽きた場合、所持品に予備があれば自動的に次の1本を消費して点け直す
+// （食料の自動消費と同様の扱い）。予備が無ければ0のまま＝暗闇になる。
+function tickTorch(minutes){
+  if (!dungeonData || dungeonData.floor < 4) return;
+  player.torchRemainingMinutes = (player.torchRemainingMinutes || 0) - minutes;
+  while (player.torchRemainingMinutes <= 0) {
+    const idx = (player.inventory || []).findIndex(i => i.name === '松明');
+    if (idx === -1) { player.torchRemainingMinutes = 0; break; }
+    player.inventory.splice(idx, 1);
+    player.torchRemainingMinutes += TORCH_BURN_MINUTES;
+  }
+}
+
 // ── 露店（追放者の居住区などから利用する簡易な購入・売却画面） ──
-// item.buy()がplayer側の状態を実際に変更する処理。costはGP単位（購入価格）。
+// item.buy()がplayer側の状態を実際に変更する処理。costはGP単位（購入価格。小数はSP/CP換算）。
 // 武器の売却は所持品(player.inventory)から行い、costの1/2のGPを受け取る。
 const SHOP_ITEMS = [
   { id: 'ration', name: '携行食料', cost: 1, unitLabel: '日分',
@@ -2619,7 +2709,10 @@ const SHOP_ITEMS = [
     buy(){ player._food = (player._food || 0) + 1; } },
   { id: 'bedding', name: '寝具', cost: 15, unitLabel: '',
     getCount(){ return (player.inventory || []).filter(i => i.name === '寝具').length; },
-    buy(){ player.inventory.push({ type: 'misc', name: '寝具', weight: 40, desc: '野宿の際に体を休めるための簡易な寝具。使い捨てではなく持ち歩いて何度でも使える。' }); } }
+    buy(){ player.inventory.push({ type: 'misc', name: '寝具', weight: 40, desc: '野宿の際に体を休めるための簡易な寝具。使い捨てではなく持ち歩いて何度でも使える。' }); } },
+  { id: 'torch', name: '松明', cost: 0.1, unitLabel: '本',
+    getCount(){ return (player.inventory || []).filter(i => i.name === '松明').length; },
+    buy(){ player.inventory.push({ type: 'misc', name: '松明', weight: 10, desc: 'ダンジョン探索や野宿の明かりに使う松明。一度火をつけると100分間燃え続ける。' }); } }
 ];
 
 // 野宿（居住地外での睡眠）時、寝具を持っているかどうかで回復量が変わる。
@@ -2637,8 +2730,9 @@ function closeShop(){
 }
 function buyShopItem(id){
   const item = SHOP_ITEMS.find(i => i.id === id);
-  if (!item || (player.gold || 0) < item.cost) return;
-  player.gold -= item.cost;
+  const costCP = Math.round(item.cost * 100);
+  if (!item || totalCP() < costCP) return;
+  payCP(costCP);
   item.buy();
   render();
 }
@@ -2646,8 +2740,26 @@ function sellWeaponItem(index){
   const item = player.inventory[index];
   if (!item || item.type !== 'weapon') return;
   const price = Math.floor((item.cost || 0) / 2);
-  player.gold = (player.gold || 0) + price;
+  gainGP(price);
   player.inventory.splice(index, 1);
+  render();
+}
+
+// 両替（OOON本家準拠：手数料なし、10枚単位でまとめて上の単位に繰り上げる）。
+function exchangeCPtoSP(){
+  const cp = player.cp || 0;
+  if (cp < 10) return;
+  const gain = Math.floor(cp / 10);
+  player.cp = cp % 10;
+  player.sp = (player.sp || 0) + gain;
+  render();
+}
+function exchangeSPtoGP(){
+  const sp = player.sp || 0;
+  if (sp < 10) return;
+  const gain = Math.floor(sp / 10);
+  player.sp = sp % 10;
+  player.gold = (player.gold || 0) + gain;
   render();
 }
 
@@ -2669,13 +2781,13 @@ function renderShop(){
   viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('shop_stall.webp')
     ? imageOrPlaceholder('shop_stall.webp', '露店')
     : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[露店]</div>`;
-  debugInfo.textContent = `所持金: ${player.gold}GP`;
+  debugInfo.textContent = `所持金: ${formatMoney()}`;
   description.textContent = '雑多な品を並べた露店だ。欲しいものはあるか。不要な武器は売ることもできる。';
 
   SHOP_ITEMS.forEach(item => {
-    const ok = (player.gold || 0) >= item.cost;
+    const ok = totalCP() >= Math.round(item.cost * 100);
     const btn = document.createElement('button');
-    btn.textContent = `${item.name}を買う（${item.cost}GP）　所持:${item.getCount()}${item.unitLabel}`;
+    btn.textContent = `${item.name}を買う（${formatItemCost(item.cost)}）　所持:${item.getCount()}${item.unitLabel}`;
     btn.disabled = !ok;
     btn.onclick = () => buyShopItem(item.id);
     choices.appendChild(btn);
@@ -2689,6 +2801,21 @@ function renderShop(){
     btn.onclick = () => sellWeaponItem(index);
     choices.appendChild(btn);
   });
+
+  // 両替（10CP=1SP、10SP=1GP。手数料なし）。
+  const cpAmt = player.cp || 0;
+  const cpToSpBtn = document.createElement('button');
+  cpToSpBtn.textContent = `CPをSPに両替する（10CP=1SP・所持:${cpAmt}CP）`;
+  cpToSpBtn.disabled = cpAmt < 10;
+  cpToSpBtn.onclick = () => exchangeCPtoSP();
+  choices.appendChild(cpToSpBtn);
+
+  const spAmt = player.sp || 0;
+  const spToGpBtn = document.createElement('button');
+  spToGpBtn.textContent = `SPをGPに両替する（10SP=1GP・所持:${spAmt}SP）`;
+  spToGpBtn.disabled = spAmt < 10;
+  spToGpBtn.onclick = () => exchangeSPtoGP();
+  choices.appendChild(spToGpBtn);
 
   const backBtn = document.createElement('button');
   backBtn.textContent = '出る';
@@ -2912,7 +3039,7 @@ function examineSurroundings(){
     _dungeonMessage = cell.repeatText || '特に新しい発見はない。';
   } else if (cell) {
     if (cell.once) cell._resolved = true;
-    if (cell.gold) player.gold += cell.gold;
+    if (cell.gold) gainGP(cell.gold);
     if (cell.item) player.inventory.push({ ...cell.item });
     _dungeonMessage = cell.text;
   } else {
@@ -3182,6 +3309,9 @@ function render() {
   } else {
     const viewType = getViewType(player.x, player.y, player.facing);
 
+    // フロア4以降は松明が燃えていないと周囲を把握できない（移動自体は手探りで可能）。
+    const isDark = dungeonData.floor >= 4 && !hasTorchLit();
+
     // 振り返り直後だけは新規にハッシュ選択せず、直前の画像を反転して使い回す
     // （見た目の整合性のため。前進／左右を向く操作をすると通常選択に戻る）
     // ただし座標固定画像（viewOverrides）はその座標＋向きの組み合わせでしか
@@ -3205,8 +3335,13 @@ function render() {
       lastCorridorVariant = variant;
     }
 
-    viewArea.innerHTML = renderCorridorView(variant, imageFlipped);
-    debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label} viewType:${viewType} 使用画像:${variant.image}${imageFlipped ? '（反転表示）' : ''}`;
+    if (isDark) {
+      viewArea.innerHTML = `<div style="width:480px;height:320px;background:#000;display:flex;align-items:center;justify-content:center;color:#555;">[暗闇で何も見えない]</div>`;
+      debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label}（暗闇・viewType:${viewType}）`;
+    } else {
+      viewArea.innerHTML = renderCorridorView(variant, imageFlipped);
+      debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label} viewType:${viewType} 使用画像:${variant.image}${imageFlipped ? '（反転表示）' : ''}`;
+    }
 
     // 罠の結果メッセージ（1回限り）→ なければ動的フレーバー → なければ座標＋向き固有の
     // フレーバーテキスト → なければタイル固有のフレーバーテキスト → なければ空
@@ -3215,6 +3350,8 @@ function render() {
     if (_dungeonMessage) {
       description.textContent = _dungeonMessage;
       _dungeonMessage = null;
+    } else if (isDark) {
+      description.textContent = '松明の明かりがなく、周囲の様子はまったくわからない。';
     } else {
       const dynText = dungeonData.dynamicFlavor ? dungeonData.dynamicFlavor(player.x, player.y) : null;
       if (dynText != null) {
@@ -3233,8 +3370,9 @@ function render() {
     }
 
     // 地面に落ちているアイテム（groundItems）。未解決なら「拾う」「放っておく」を表示する。
+    // 暗闇では何も見えないため表示しない。
     const groundItem = dungeonData.groundItems && dungeonData.groundItems[posKey];
-    if (groundItem && !groundItem._resolved) {
+    if (!isDark && groundItem && !groundItem._resolved) {
       description.textContent = groundItem.label;
 
       const pickUpBtn = document.createElement('button');
@@ -3253,9 +3391,9 @@ function render() {
       choices.appendChild(leaveBtn);
     }
 
-    // レバーなどの設備（interactCells）。未解決なら操作ボタンを表示する。
+    // レバーなどの設備（interactCells）。未解決なら操作ボタンを表示する。暗闇では操作できない。
     const interact = dungeonData.interactCells && dungeonData.interactCells[posKey];
-    if (interact && !interact._resolved) {
+    if (!isDark && interact && !interact._resolved) {
       const interactBtn = document.createElement('button');
       interactBtn.textContent = interact.label;
       interactBtn.onclick = () => handleAction(interact.action);
@@ -3459,7 +3597,7 @@ function _grantCombatVictory(){
   // 標準宝物生成（OOON本家の宝物作成表準拠、rollTreasure()参照）。全ての戦闘勝利で共通。
   const gp = rollTreasure(cs.totalMR);
   if (gp > 0) {
-    player.gold += gp;
+    gainGP(gp);
     cs.log.push(`宝物として${gp}GPを手に入れた！`);
   }
 
