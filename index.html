@@ -465,6 +465,10 @@ body{display:flex;flex-direction:column;align-items:center;
 <div id="status-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;display:flex;justify-content:center;align-items:flex-start;padding:20px 16px;overflow-y:auto">
  <div style="width:100%;max-width:480px;background:var(--ink);border:2px solid var(--border);border-radius:4px;padding:14px;font-family:system-ui,sans-serif">
 
+  <!-- タブ切り替え（同行者がいるときだけ表示。renderStatusPanel()参照） -->
+  <div id="sp-tabs" style="display:none;gap:6px;margin-bottom:10px"></div>
+
+  <div id="sp-pc-view">
   <!-- 名前・種族・職業 -->
   <div style="text-align:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--earth)">
    <div id="sp-name" style="font-size:calc(var(--font-lg) + 2px);color:#f0ece0;margin-bottom:2px"></div>
@@ -499,12 +503,6 @@ body{display:flex;flex-direction:column;align-items:center;
   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 装備 ──</div>
   <div id="sp-equip" style="margin-bottom:10px"></div>
 
-  <!-- 同行者（いるときだけ表示。renderStatusPanel()参照） -->
-  <div id="sp-companion-wrap" style="display:none">
-   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 同行者 ──</div>
-   <div id="sp-companion" style="margin-bottom:10px"></div>
-  </div>
-
   <!-- 死体（運んでいるときだけ表示。renderStatusPanel()参照） -->
   <div id="sp-corpse-wrap" style="display:none">
    <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 死体 ──</div>
@@ -522,6 +520,10 @@ body{display:flex;flex-direction:column;align-items:center;
   <!-- 言語 -->
   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 言語 ──</div>
   <div id="sp-languages" style="margin-bottom:14px;font-size:var(--font-sm);color:#ece8e0"></div>
+  </div>
+
+  <!-- 同行者タブ（同行者がいる間だけ中身が入る。renderCompanionStatusTab()参照） -->
+  <div id="sp-companion-view" class="hidden"></div>
 
   <button onclick="closeStatusPanel()" style="width:100%;font-size:calc(var(--font-sm) - 1px);padding:12px;background:#120f06;border:2px solid var(--border);color:#f0ece0;font-family:system-ui,sans-serif;cursor:pointer;border-radius:4px"> 閉じる</button>
  </div>
@@ -1261,6 +1263,7 @@ function renderHUD(){
 // 誕生日表示は省略し、年齢は固定値。食料は1日ごとにtickFoodDaily()でチェックされる）。
 function openStatusPanel(){
  if (!player) return;
+ statusTab = 'pc';
  renderStatusPanel();
  document.getElementById('status-overlay').classList.remove('hidden');
  // #nav-controlsは position:fixed で常時最前面に表示されるため、IDセレクタより
@@ -1273,25 +1276,33 @@ function closeStatusPanel(){
  document.getElementById('nav-controls').style.display = '';
 }
 
-// player.inventory内のitem（type: 'weapon'|'armor'）をplayer.equipped[type]に装備する。
+// pc.inventory内のitem（type: 'weapon'|'armor'）をpc.equipped[type]に装備する。
 // 既に何か装備していればインベントリへ戻す（入れ替え）。ST/DEX要件を満たさない場合は装備しない。
-function equipItem(type, index){
- const item = player.inventory[index];
+// owner省略時はplayer本人。'companion'を渡すと同行者（player.companion）に対して行う
+// （ステータス画面の同行者タブから、同じ処理を使い回すため）。
+function equipItem(type, index, owner){
+ const pc = owner === 'companion' ? player.companion : player;
+ if (!pc) return;
+ pc.inventory = pc.inventory || [];
+ const item = pc.inventory[index];
  if (!item || item.type !== type) return;
- if (type === 'weapon' ? !canEquipPrimaryWeapon(player, item) : !meetsEquipReq(player, item)) return;
- const prev = player.equipped[type];
- player.inventory.splice(index, 1);
- if (prev) player.inventory.push(prev);
- player.equipped[type] = item;
+ if (type === 'weapon' ? !canEquipPrimaryWeapon(pc, item) : !meetsEquipReq(pc, item)) return;
+ const prev = pc.equipped[type];
+ pc.inventory.splice(index, 1);
+ if (prev) pc.inventory.push(prev);
+ pc.equipped[type] = item;
  renderStatusPanel();
  renderHUD();
 }
 
-function unequipItem(type){
- const item = player.equipped[type];
+function unequipItem(type, owner){
+ const pc = owner === 'companion' ? player.companion : player;
+ if (!pc) return;
+ const item = pc.equipped[type];
  if (!item) return;
- player.equipped[type] = null;
- player.inventory.push(item);
+ pc.equipped[type] = null;
+ pc.inventory = pc.inventory || [];
+ pc.inventory.push(item);
  renderStatusPanel();
  renderHUD();
 }
@@ -1335,7 +1346,34 @@ function equipSecondWeapon(index){
  renderHUD();
 }
 
+// ステータス画面のタブ状態。'pc'（あなた）または'companion'（同行者）。
+// 同行者がいない間はcompanionタブ自体を表示しない（下のタブバー描画・render()冒頭で強制）。
+let statusTab = 'pc';
+function setStatusTab(tab){
+ statusTab = tab;
+ renderStatusPanel();
+}
+
 function renderStatusPanel(){
+ if (!player.companion) statusTab = 'pc';
+
+ // タブ切り替え（同行者がいるときだけ表示）
+ const tabsEl = document.getElementById('sp-tabs');
+ if (player.companion) {
+  tabsEl.style.display = 'flex';
+  const tabBtn = (label, tab) => `<button onclick="setStatusTab('${tab}')" style="flex:1;font-size:calc(var(--font-sm) - 2px);padding:8px 4px;font-family:system-ui,sans-serif;cursor:pointer;border-radius:3px;background:${statusTab===tab?'var(--panel2)':'var(--panel)'};border:1px solid ${statusTab===tab?'var(--white2)':'var(--border)'};color:${statusTab===tab?'#f0ece0':'var(--dim)'}">${label}</button>`;
+  tabsEl.innerHTML = tabBtn('あなた', 'pc') + tabBtn(player.companion.name, 'companion');
+ } else {
+  tabsEl.style.display = 'none';
+  tabsEl.innerHTML = '';
+ }
+ document.getElementById('sp-pc-view').classList.toggle('hidden', statusTab === 'companion');
+ document.getElementById('sp-companion-view').classList.toggle('hidden', statusTab !== 'companion');
+ if (statusTab === 'companion') {
+  renderCompanionStatusTab();
+  return;
+ }
+
  const raceLabel = RACE_LABEL_JP[player.race] || player.race;
  const typeLabel = TYPE_LABEL_JP[player.type] || player.type;
 
@@ -1466,27 +1504,6 @@ function renderStatusPanel(){
   equippedRow('衣服', clothingItem, 'clothing') +
   invItemsHtml;
 
- // 同行者（いるときだけ表示。装備の入れ替えは行わず現状把握のみ）
- const companionWrap = document.getElementById('sp-companion-wrap');
- if (player.companion) {
-  const c = player.companion;
-  const raceLabel = RACE_LABEL_JP[c.race] || c.race;
-  const typeLabel = TYPE_LABEL_JP[c.type] || c.type;
-  const cWeaponLabel = c.equipped.weapon ? formatWeaponDice(c.equipped.weapon) : '素手';
-  const cArmorLabel = `防護${getArmorValue(c)}`;
-  companionWrap.style.display = '';
-  document.getElementById('sp-companion').innerHTML = `
-   <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-     <span style="font-size:var(--font-sm);color:#f0ece0">${c.name}</span>
-     <span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">${raceLabel}・${typeLabel} Lv${c.level}</span>
-    </div>
-    <div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim)">体力 ${Math.max(c.con,0)}/${c.maxCon}　${cWeaponLabel}　${cArmorLabel}${c.con<=0?'　<span style="color:var(--red)">（戦闘不能）</span>':''}</div>
-   </div>`;
- } else {
-  companionWrap.style.display = 'none';
- }
-
  // 死体（運んでいるときだけ表示。食料と交換できない死体でも、ここから手放せる）
  const corpseIndex = (player.inventory || []).findIndex(i => i.type === 'corpse');
  const corpseWrap = document.getElementById('sp-corpse-wrap');
@@ -1523,6 +1540,192 @@ function renderStatusPanel(){
 
  // 言語
  document.getElementById('sp-languages').textContent = (player.languages || []).join('、');
+}
+
+// ── 同行者タブ（ステータス画面）。あなた自身のタブとほぼ同じ構成で同行者の能力値・
+// 装備を表示し、あわせてアイテム・お金の受け渡しができる（OOON本家の
+// renderNPCDetail()/showItemTransfer()/giveCurrencyToNPC()を簡略移植）。
+let _companionTransferDir = 'to_companion'; // 'to_companion' | 'to_player'
+function setCompanionTransferDir(dir){
+ _companionTransferDir = dir;
+ renderStatusPanel();
+}
+
+// アイテムを1つ、あなた⇔同行者の間で受け渡す（死体は対象外）。
+function transferInventoryItem(direction, index){
+ const c = player.companion;
+ if (!c) return;
+ const src = direction === 'to_companion' ? player : c;
+ const dest = direction === 'to_companion' ? c : player;
+ src.inventory = src.inventory || [];
+ dest.inventory = dest.inventory || [];
+ const item = src.inventory[index];
+ if (!item) return;
+ src.inventory.splice(index, 1);
+ dest.inventory.push(item);
+ renderStatusPanel();
+ renderHUD();
+}
+
+// GP/SP/CPをあなた⇔同行者の間で受け渡す（OOON本家giveCurrencyToNPC()準拠、
+// prompt()で金額を入力する簡易UI）。
+function giveCurrencyToCompanion(direction, currency){
+ const c = player.companion;
+ if (!c) return;
+ const src = direction === 'to_companion' ? player : c;
+ const dest = direction === 'to_companion' ? c : player;
+ const label = { gold: 'GP', sp: 'SP', cp: 'CP' }[currency];
+ const srcLabel = direction === 'to_companion' ? 'あなた' : c.name;
+ const destLabel = direction === 'to_companion' ? c.name : 'あなた';
+ const have = src[currency] || 0;
+ const input = prompt(`${srcLabel}から${destLabel}に渡す${label}を入力してください（${srcLabel}の所持${label}：${have}）`, '');
+ if (input === null) return;
+ const amount = parseInt(input, 10);
+ if (!amount || amount <= 0) { alert('正しい金額を入力してください'); return; }
+ if (have < amount) { alert(`所持${label}が足りません`); return; }
+ src[currency] = have - amount;
+ dest[currency] = (dest[currency] || 0) + amount;
+ renderStatusPanel();
+ renderHUD();
+}
+
+function renderCompanionStatusTab(){
+ const c = player.companion;
+ const el = document.getElementById('sp-companion-view');
+ if (!c) { el.innerHTML = ''; return; }
+
+ const raceLabel = RACE_LABEL_JP[c.race] || c.race;
+ const typeLabel = TYPE_LABEL_JP[c.type] || c.type;
+
+ const attrsHtml = [
+  ['強さ', c.st, c.maxSt],
+  ['知力', c.iq, null],
+  ['運', c.lk, null],
+  ['体力', c.con, c.maxCon],
+  ['器用さ', c.dex, null],
+  ['魅力', c.chr, null],
+  ['素早さ', c.spd, null],
+ ].map(([label, val, max]) => {
+  const pct = max ? Math.max(0, val / max * 100) : null;
+  const color = max ? (pct > 50 ? 'var(--white)' : pct > 25 ? '#e0c860' : 'var(--red)') : 'var(--white)';
+  return `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:6px 8px">
+   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:3px">${label}</div>
+   <div style="font-size:calc(var(--font-base) + 1px);color:${color}">${val}${max ? `<span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">/${max}</span>` : ''}</div>
+  </div>`;
+ }).join('');
+
+ const adds = calcAdds(c);
+ const armorVal = getArmorValue(c);
+ const combatHtml = [
+  ['戦闘力修正', (adds >= 0 ? '+' : '') + adds, 'var(--white)'],
+  ['防護値', armorVal + 'hits', 'var(--white)'],
+ ].map(([l, v, col]) => `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:6px 8px;text-align:center">
+   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:3px">${l}</div>
+   <div style="font-size:var(--font-base);color:${col}">${v}</div>
+  </div>`).join('');
+
+ const advHtml = [
+  ['所持金', formatMoney(c), 'var(--gold)'],
+  ['経験値', c.ap, 'var(--gold)'],
+  ['LV', c.level, 'var(--gold)'],
+ ].map(([l, v, col]) => `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:6px 8px;text-align:center">
+   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:3px">${l}</div>
+   <div style="font-size:var(--font-base);color:${col}">${v}</div>
+  </div>`).join('');
+
+ // 装備（武器・防具のみ。同行者は履物・背負い袋・衣服・二刀流を扱わない）
+ const weapon = c.equipped.weapon;
+ const armorItem = c.equipped.armor;
+ const equippedRow = (label, item, type) => `
+  <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">
+   <div>
+    <span style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">${label}: </span>
+    <span style="font-size:var(--font-sm);color:#f0ece0">${item ? item.name : (type === 'weapon' ? 'なし（素手）' : 'なし')}</span>
+    ${item ? `<div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim)">${type === 'weapon' ? formatWeaponDice(item) : `防護${item.hits}`}</div>` : ''}
+   </div>
+   ${item ? `<button onclick="unequipItem('${type}','companion')" style="background:none;border:1px solid var(--border);color:var(--dim);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 8px;cursor:pointer;border-radius:2px">外す</button>` : ''}
+  </div>`;
+
+ const invRow = (item, index) => {
+  const ok = item.type === 'weapon' ? canEquipPrimaryWeapon(c, item) : meetsEquipReq(c, item);
+  const statLabel = item.type === 'weapon' ? formatWeaponDice(item) : `防護${item.hits}`;
+  const reqLabel = `必要ST${item.stReq}${item.dexReq ? `・DEX${item.dexReq}` : ''}`;
+  return `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">
+   <div>
+    <span style="font-size:var(--font-sm);color:${ok ? '#f0ece0' : 'var(--dim)'}">${item.name}</span>
+    <div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim)">${statLabel}　${reqLabel}</div>
+   </div>
+   <button onclick="equipItem('${item.type}',${index},'companion')" ${ok ? '' : 'disabled'} style="background:none;border:1px solid var(--border);color:${ok ? 'var(--dim)' : '#5a5248'};font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 8px;cursor:${ok ? 'pointer' : 'default'};border-radius:2px;opacity:${ok ? '1' : '.5'}">装備する</button>
+  </div>`;
+ };
+
+ const invItemsHtml = (c.inventory || [])
+  .map((item, index) => ({ item, index }))
+  .filter(({ item }) => item.type === 'weapon' || item.type === 'armor')
+  .map(({ item, index }) => invRow(item, index))
+  .join('');
+
+ // アイテム受け渡し（双方向タブ。方向は_companionTransferDirで保持）
+ const dir = _companionTransferDir;
+ const transferSrc = dir === 'to_companion' ? player : c;
+ const transferItems = (transferSrc.inventory || [])
+  .map((item, index) => ({ item, index }))
+  .filter(({ item }) => item.type !== 'corpse');
+ const transferItemsHtml = transferItems.length
+  ? transferItems.map(({ item, index }) => `
+    <div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">
+     <span style="font-size:var(--font-sm);color:#f0ece0">${item.name}</span>
+     <button onclick="transferInventoryItem('${dir}',${index})" style="background:none;border:1px solid var(--border);color:var(--dim);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 8px;cursor:pointer;border-radius:2px">渡す</button>
+    </div>`).join('')
+  : `<div style="font-size:var(--font-sm);color:var(--dim);text-align:center;padding:10px">渡せるアイテムがありません</div>`;
+
+ const dirTabBtn = (label, d) => `<button onclick="setCompanionTransferDir('${d}')" style="flex:1;font-size:calc(var(--font-sm) - 3px);padding:8px 4px;font-family:system-ui,sans-serif;cursor:pointer;border-radius:2px;background:${dir === d ? 'var(--panel2)' : 'var(--panel)'};border:1px solid ${dir === d ? 'var(--white2)' : 'var(--border)'};color:${dir === d ? '#f0ece0' : 'var(--dim)'}">${label}</button>`;
+
+ const currencyBtn = (direction, currency, label) => `<button onclick="giveCurrencyToCompanion('${direction}','${currency}')" style="flex:1;background:none;border:1px solid var(--border);color:var(--dim);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 1px);padding:6px;cursor:pointer;border-radius:2px">${label}</button>`;
+
+ el.innerHTML = `
+  <div style="text-align:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--earth)">
+   <div style="font-size:calc(var(--font-lg) + 2px);color:#f0ece0;margin-bottom:2px">${c.name}${c.con <= 0 ? '　<span style="color:var(--red);font-size:calc(var(--font-sm) - 1px)">（戦闘不能）</span>' : ''}</div>
+   <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim)">${raceLabel} ${typeLabel} Lv${c.level}</div>
+  </div>
+
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 能力値 ──</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">${attrsHtml}</div>
+
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 戦闘値 ──</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">${combatHtml}</div>
+
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 冒険 ──</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:10px">${advHtml}</div>
+
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── 装備 ──</div>
+  <div style="margin-bottom:10px">
+   ${equippedRow('武器', weapon, 'weapon')}
+   ${equippedRow('防具', armorItem, 'armor')}
+   ${invItemsHtml}
+  </div>
+
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── アイテムの受け渡し ──</div>
+  <div style="display:flex;gap:6px;margin-bottom:8px">
+   ${dirTabBtn('あなた → ' + c.name, 'to_companion')}
+   ${dirTabBtn(c.name + ' → あなた', 'to_player')}
+  </div>
+  <div style="margin-bottom:10px">${transferItemsHtml}</div>
+
+  <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:6px">── お金の受け渡し ──</div>
+  <div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim);margin-bottom:4px">あなた → ${c.name}</div>
+  <div style="display:flex;gap:6px;margin-bottom:8px">
+   ${currencyBtn('to_companion', 'gold', 'GP')}
+   ${currencyBtn('to_companion', 'sp', 'SP')}
+   ${currencyBtn('to_companion', 'cp', 'CP')}
+  </div>
+  <div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim);margin-bottom:4px">${c.name} → あなた</div>
+  <div style="display:flex;gap:6px;margin-bottom:14px">
+   ${currencyBtn('to_player', 'gold', 'GP')}
+   ${currencyBtn('to_player', 'sp', 'SP')}
+   ${currencyBtn('to_player', 'cp', 'CP')}
+  </div>
+ `;
 }
 
 // images/ 配下の画像はファイル名を変えずに中身だけ差し替えることがあるため、
@@ -3659,6 +3862,10 @@ function generateCompanionCandidate(){
     weapon: type === 'wizard' ? null : { ...COMPANION_LV1_WEAPON },
     armor: { ...COMPANION_LV1_ARMOR },
   };
+  npc.gold = 0;
+  npc.sp = 0;
+  npc.cp = 0;
+  npc.inventory = []; // あなたとの間でアイテムを受け渡しできる（ステータス画面の同行者タブ参照）
   return npc;
 }
 
