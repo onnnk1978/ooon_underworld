@@ -521,6 +521,15 @@ body{display:flex;flex-direction:column;align-items:center;
  </div>
 </div>
 
+<!-- レベルアップ時の能力値上昇選択パネル（OOON本家 #levelup-panel を移植。オーバーレイ表示）。
+     どれか1つを選ぶまで閉じられない（キャンセル無し）。 -->
+<div id="levelup-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:60;display:flex;justify-content:center;align-items:center;padding:20px 16px;overflow-y:auto">
+ <div style="width:100%;max-width:480px;background:var(--ink);border:2px solid var(--border);border-radius:4px;padding:14px;font-family:system-ui,sans-serif">
+  <div id="lu-title" style="text-align:center;font-size:calc(var(--font-lg) + 2px);color:#f0ece0;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--earth)"></div>
+  <div id="lu-options" style="display:flex;flex-direction:column;gap:8px"></div>
+ </div>
+</div>
+
 <script>
 // ── 本番/開発判定 ──
 // 本番公開先（Cloudflare Pages）のホスト名でだけ、デバッグ用の座標・向き・
@@ -1112,8 +1121,7 @@ function _resolveDiceTest(result){
  // 経験点はルール通り出目×テストの難易度レベル（成否問わず加算。OOON本家のsavingRoll()と同じく
  // 判定者自身の現在レベルではなく、そのテスト自体に設定された難易度レベルを使う）
  const apGain = roll.total * pending.testLevel;
- actor.ap = (actor.ap || 0) + apGain;
- actor.level = levelFromAP(actor.ap);
+ gainAP(apGain, actor);
 
  let doublesStr = '';
  for (let i = 2; i < roll.dice.length; i += 2) doublesStr += ' +';
@@ -2732,6 +2740,75 @@ function levelFromAP(ap){
   return level;
 }
 
+// APを加算し、レベルが上がっていればプレイヤー本人に限り能力値上昇選択パネルを
+// 表示する（OOON本家のgainAP()/gainAPFor()と同じくAPの加算とレベル判定を一箇所に
+// まとめる。pc省略時はplayer。閾値を一気に複数またいでもOOON本家と同じく
+// パネルは1回だけ、上昇量は新しいレベル基準で計算する）。
+function gainAP(amount, pc){
+  pc = pc || player;
+  if (!pc) return;
+  pc.ap = (pc.ap || 0) + amount;
+  const newLevel = levelFromAP(pc.ap);
+  const oldLevel = pc.level || 1;
+  pc.level = newLevel;
+  if (pc === player && newLevel > oldLevel) queueLevelUp(oldLevel, newLevel);
+}
+
+// ── レベルアップ時の能力値上昇選択（OOON本家 showLevelUpPanel() 準拠）。──
+// 本作はプレイヤー1人のみのため、OOON本家のNPC分岐・戦闘継続再開は不要。
+// 知力・器用さの永続増加は、不眠ペナルティの基準値（_baseIq/_baseDex）にも
+// 反映する必要がある（強さ・体力のmaxSt/maxConと同様。反映しないと不眠ペナルティが
+// 上昇分を無視した古い基準で計算され続けてしまう）。
+let _levelUpActive = false;
+let _levelUpQueue = []; // 複数レベル分一気に上がった場合はここに積む（通常は発生しない）
+function queueLevelUp(oldLevel, newLevel){
+  if (_levelUpActive) {
+    _levelUpQueue.push({ oldLevel, newLevel });
+  } else {
+    _levelUpActive = true;
+    showLevelUpPanel(oldLevel, newLevel);
+  }
+}
+function _processLevelUpQueue(){
+  if (_levelUpQueue.length === 0) { _levelUpActive = false; return; }
+  const next = _levelUpQueue.shift();
+  showLevelUpPanel(next.oldLevel, next.newLevel);
+}
+function showLevelUpPanel(oldLevel, newLevel){
+  const lv = newLevel;
+  const half = Math.floor(lv / 2);
+  const opts = [
+    { label: `A. 強さ + ${lv}`, fn: () => { player.st += lv; player.maxSt = (player.maxSt || player.st) + lv; } },
+    { label: `B. 知力 + ${half}`, fn: () => { player.iq += half; player._baseIq = (player._baseIq || player.iq) + half; } },
+    { label: `C. 運 + ${lv * 2}`, fn: () => { player.lk += lv * 2; } },
+    { label: `D. 体力 + ${lv}`, fn: () => { player.con += lv; player.maxCon = (player.maxCon || player.con) + lv; } },
+    { label: `E. 器用さ + ${half}`, fn: () => { player.dex += half; player._baseDex = (player._baseDex || player.dex) + half; } },
+    { label: `F. 魅力 + ${half}`, fn: () => { player.chr += half; } },
+    { label: `G. 強さ + ${half} / 体力 + ${half}`, fn: () => {
+        player.st += half; player.maxSt = (player.maxSt || player.st) + half;
+        player.con += half; player.maxCon = (player.maxCon || player.con) + half;
+      } },
+  ];
+
+  document.getElementById('lu-title').textContent = `⬆ Lv${oldLevel} → Lv${newLevel}`;
+  const el = document.getElementById('lu-options');
+  el.innerHTML = '';
+  opts.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.textContent = opt.label;
+    btn.onclick = () => {
+      opt.fn();
+      document.getElementById('levelup-overlay').classList.add('hidden');
+      renderHUD();
+      if (!document.getElementById('status-overlay').classList.contains('hidden')) renderStatusPanel();
+      _processLevelUpQueue();
+    };
+    el.appendChild(btn);
+  });
+  document.getElementById('levelup-overlay').classList.remove('hidden');
+}
+
 // ── 戦闘加算値（adds）：ST/LK/DEXそれぞれ12超で+、9未満で- ──
 function statAdd(v){
   if (v > 12) return v - 12;
@@ -3389,8 +3466,7 @@ function isWaterQuestOnCooldown(){
 }
 function doWaterQuest(){
   if (isWaterQuestOnCooldown()) return;
-  player.ap = (player.ap || 0) + 2;
-  player.level = levelFromAP(player.ap);
+  gainAP(2);
   changeSettlementTrust(0.2);
   player._waterQuestBatchCount = (player._waterQuestBatchCount || 0) + 1;
   if (player._waterQuestBatchCount >= 5) {
@@ -3411,8 +3487,7 @@ function reportRatNestQuest(){
   const fd = DUNGEON_FLOORS[3.1];
   if (!isRatNestCleared() || fd._nestReported) return;
   fd._nestReported = true;
-  player.ap = (player.ap || 0) + 500;
-  player.level = levelFromAP(player.ap);
+  gainAP(500);
   changeSettlementTrust(10);
   _leaderMessage = 'ドワーフ「よくやった！ これで巣の心配はしばらくないだろう。」';
   render();
@@ -4361,12 +4436,10 @@ function resolveCombatRound(pcAction){
 function _grantCombatVictory(){
   const cs = combatState;
   const apGain = Math.max(1, cs.totalMR); // 生存メンバー数=1（ソロ）
-  player.ap += apGain;
-  const newLevel = levelFromAP(player.ap);
-  const leveledUp = newLevel > player.level;
-  player.level = newLevel;
+  const oldLevel = player.level;
+  gainAP(apGain);
   cs.log.push(`${cs.enemies.map(e => e.name).join('・')}を倒した！ AP+${apGain}（累計${player.ap}）`);
-  if (leveledUp) cs.log.push(`レベルが${player.level}に上がった！`);
+  if (player.level > oldLevel) cs.log.push(`レベルが${player.level}に上がった！`);
 
   // 標準宝物生成（OOON本家の宝物作成表準拠、rollTreasure()参照）。全ての戦闘勝利で共通。
   const treasure = rollTreasure(cs.totalMR);
