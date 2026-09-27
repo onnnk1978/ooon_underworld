@@ -2745,6 +2745,24 @@ function sellWeaponItem(index){
   render();
 }
 
+// 両替（OOON本家準拠：手数料なし、10枚単位でまとめて上の単位に繰り上げる）。
+function exchangeCPtoSP(){
+  const cp = player.cp || 0;
+  if (cp < 10) return;
+  const gain = Math.floor(cp / 10);
+  player.cp = cp % 10;
+  player.sp = (player.sp || 0) + gain;
+  render();
+}
+function exchangeSPtoGP(){
+  const sp = player.sp || 0;
+  if (sp < 10) return;
+  const gain = Math.floor(sp / 10);
+  player.sp = sp % 10;
+  player.gold = (player.gold || 0) + gain;
+  render();
+}
+
 // 戦闘やダンジョンビューと同じ要素（viewArea/description/choices）を使い回して
 // 露店画面を描く。renderCombat()と同様、render()から分岐して呼ばれる。
 function renderShop(){
@@ -2783,6 +2801,21 @@ function renderShop(){
     btn.onclick = () => sellWeaponItem(index);
     choices.appendChild(btn);
   });
+
+  // 両替（10CP=1SP、10SP=1GP。手数料なし）。
+  const cpAmt = player.cp || 0;
+  const cpToSpBtn = document.createElement('button');
+  cpToSpBtn.textContent = `CPをSPに両替する（10CP=1SP・所持:${cpAmt}CP）`;
+  cpToSpBtn.disabled = cpAmt < 10;
+  cpToSpBtn.onclick = () => exchangeCPtoSP();
+  choices.appendChild(cpToSpBtn);
+
+  const spAmt = player.sp || 0;
+  const spToGpBtn = document.createElement('button');
+  spToGpBtn.textContent = `SPをGPに両替する（10SP=1GP・所持:${spAmt}SP）`;
+  spToGpBtn.disabled = spAmt < 10;
+  spToGpBtn.onclick = () => exchangeSPtoGP();
+  choices.appendChild(spToGpBtn);
 
   const backBtn = document.createElement('button');
   backBtn.textContent = '出る';
