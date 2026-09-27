@@ -2665,6 +2665,34 @@ function moveTo(x, y, facing){
   render();
 }
 
+// 直進通路（viewType==='straight'）用の汎用フレーバーテキスト。その座標に個別の
+// tileFlavorが設定されていない場合にだけ、この中からランダムに1つ選んで表示する
+// （個別に用意されたテキストのほうが優先される。render()参照）。
+const STRAIGHT_CORRIDOR_FLAVORS = [
+  'まっすぐな通路が先へ伸びている。',
+  '平坦でまっすぐな通路だ。',
+  '前方へとまっすぐ伸びる通路がある。',
+  '通路は前方に一直線に続いている。',
+  '前後へとまっすぐ一本の通路が通っている。',
+  '石畳の通路が一本、先へと続いている。',
+  '整然と石が敷かれたまっすぐな通路だ。',
+  '切り出された岩壁の間を、まっすぐな通路が貫いている。',
+  '荒々しい岩肌に囲まれた、まっすぐな通路だ。',
+  '重厚な石造りの通路が一直線に伸びている。',
+  'まっすぐな通路が遥か先まで延びている。',
+  'どこまでもまっすぐ伸びる通路だ。',
+  '先のほうまで見通せる一直線の通路だ。',
+  '一筋の通路が、はるか奥まで一直線に伸びている。',
+  '通路は曲がることなく、遠く奥へと繋がっている。',
+  '静けさの中に、まっすぐな通路が横たわっている。',
+  'ひんやりとした空気の漂う、まっすぐな通路だ。',
+  '風が吹き抜ける、一本のまっすぐな通路だ。',
+  '静寂の中、まっすぐな通路が先へと延びている。',
+];
+function pickStraightCorridorFlavor(){
+  return STRAIGHT_CORRIDOR_FLAVORS[Math.floor(Math.random() * STRAIGHT_CORRIDOR_FLAVORS.length)];
+}
+
 // 「周囲を調べる」：現在地のexamineCellsにカスタムイベントがあれば起動し、
 // なければ汎用の「何も見つからなかった」系メッセージをランダムに表示する。
 const EXAMINE_NOTHING_MESSAGES = [
@@ -2917,7 +2945,8 @@ function render() {
       const variant = pickVariant(dungeonData.floor, player.x, player.y, player.facing, viewType);
       viewArea.innerHTML = renderCorridorView(variant, false);
       debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label} viewType:${viewType} 使用画像:${variant.image}`;
-      description.textContent = dungeonData.tileFlavor[posKey] || '';
+      description.textContent = dungeonData.tileFlavor[posKey]
+        || (viewType === 'straight' ? pickStraightCorridorFlavor() : '');
 
       const forwardBtn = document.createElement('button');
       forwardBtn.textContent = '前へ進む';
@@ -2984,7 +3013,15 @@ function render() {
       _dungeonMessage = null;
     } else {
       const dynText = dungeonData.dynamicFlavor ? dungeonData.dynamicFlavor(player.x, player.y) : null;
-      description.textContent = dynText != null ? dynText : (dungeonData.tileFlavor[posKey] || '');
+      if (dynText != null) {
+        description.textContent = dynText;
+      } else if (dungeonData.tileFlavor[posKey]) {
+        description.textContent = dungeonData.tileFlavor[posKey];
+      } else if (viewType === 'straight') {
+        description.textContent = pickStraightCorridorFlavor();
+      } else {
+        description.textContent = '';
+      }
     }
 
     // 地面に落ちているアイテム（groundItems）。未解決なら「拾う」「放っておく」を表示する。
