@@ -3218,16 +3218,16 @@ function _sumDice(n){
   return t;
 }
 
-// OOON本家 generateTreasure()/rollTreasureCoins() のコイン算出部分
-// （3D6×10×(MR/30)枚、1→CP/2-4→SP/5-6→GPの通貨判定、1GP=10SP=100CP換算）を
-// このゲームのGP単一通貨に置き換え、さらに1/10のスケールにしたもの。
+// OOON本家 generateTreasure()/rollTreasureCoins()/collectCoins() のコイン算出部分に準拠。
+// コインの枚数（3D6×10×(MR/30)）を算出し、1回のd6判定で通貨単位を決める
+// （1→CP、2-4→SP、5-6→GP。全戦闘勝利で共通の判定）。
 // 宝石・宝飾品の生成（2D6で2か12の場合のみ）はこのゲームに対応する仕組みが無いため省略している。
 // 全ての戦闘勝利で共通の標準宝物生成として使う（_grantCombatVictory()参照）。
 function rollTreasure(mr){
-  const baseAmt = Math.max(1, Math.floor(_sumDice(3) * 10 * (mr / 30)));
+  const amount = Math.max(1, Math.floor(_sumDice(3) * 10 * (mr / 30)));
   const currencyRoll = Math.floor(Math.random() * 6) + 1;
-  const gpPerCoin = currencyRoll === 1 ? 0.01 : currencyRoll <= 4 ? 0.1 : 1;
-  return Math.round(baseAmt * gpPerCoin / 10);
+  const unit = currencyRoll === 1 ? 'CP' : currencyRoll <= 4 ? 'SP' : 'GP';
+  return { amount, unit };
 }
 
 function maybeTriggerFloor3Wandering(){
@@ -3722,10 +3722,12 @@ function _grantCombatVictory(){
   if (leveledUp) cs.log.push(`レベルが${player.level}に上がった！`);
 
   // 標準宝物生成（OOON本家の宝物作成表準拠、rollTreasure()参照）。全ての戦闘勝利で共通。
-  const gp = rollTreasure(cs.totalMR);
-  if (gp > 0) {
-    gainGP(gp);
-    cs.log.push(`宝物として${gp}GPを手に入れた！`);
+  const treasure = rollTreasure(cs.totalMR);
+  if (treasure.amount > 0) {
+    if (treasure.unit === 'CP') gainCP(treasure.amount);
+    else if (treasure.unit === 'SP') gainSP(treasure.amount);
+    else gainGP(treasure.amount);
+    cs.log.push(`宝物として${treasure.amount}${treasure.unit}を手に入れた！`);
   }
 
   // 死体は一つしか持ち運べない（複数体を倒した場合は先頭の敵の死体を対象にする）。
