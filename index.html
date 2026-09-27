@@ -2118,6 +2118,20 @@ document.addEventListener('keydown', (e) => {
   btn.click();
 });
 
+// 画面上の選択肢（#choices内のボタン）を数字キー1〜9で選べるようにする。
+// 戦闘コマンド・部屋のイベント選択肢・露店・睡眠メニュー・通常の移動先選択肢など、
+// すべて#choicesを共有しているため、この1つのハンドラで一括して対応できる。
+document.addEventListener('keydown', (e) => {
+  if (!/^[1-9]$/.test(e.key)) return;
+  const active = document.activeElement;
+  if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+  const buttons = document.querySelectorAll('#choices button');
+  const btn = buttons[Number(e.key) - 1];
+  if (!btn || btn.disabled) return;
+  e.preventDefault();
+  btn.click();
+});
+
 // ============================================================
 // タイル判定
 // ============================================================
