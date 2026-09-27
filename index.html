@@ -2693,6 +2693,31 @@ function pickStraightCorridorFlavor(){
   return STRAIGHT_CORRIDOR_FLAVORS[Math.floor(Math.random() * STRAIGHT_CORRIDOR_FLAVORS.length)];
 }
 
+// 90度の曲がり角（viewType==='corner_left'|'corner_right'）用の汎用フレーバーテキスト。
+// STRAIGHT_CORRIDOR_FLAVORSと同様、個別のtileFlavorが無い場合にだけ使う。
+const CORNER_FLAVORS = [
+  '通路はここで90度折れ曲がっている。',
+  '直角に折れ曲がった角が目前に迫っている。',
+  '通路は急角度で折れ曲がっている。',
+  '直角の曲がり角だ。先の様子はここからは窺えない。',
+  '通路はL字に折れ、奥へと続いている。',
+  '壁にぶつかり、通路は直角に折れ曲がっている。',
+  '直角に曲がる角の先から、冷たい空気が流れ込んでくる。',
+  '道は急な角を描き、視界を遮っている。',
+  'ここで通路は直角に折れ、別の区画へと繋がっているようだ。',
+];
+function pickCornerFlavor(){
+  return CORNER_FLAVORS[Math.floor(Math.random() * CORNER_FLAVORS.length)];
+}
+
+// viewTypeに応じた汎用フレーバーテキストの抽選（該当する種類が無ければnull）。
+// tileFlavorが個別に設定されていない座標でのフォールバックとして使う。
+function pickGenericFlavor(viewType){
+  if (viewType === 'straight') return pickStraightCorridorFlavor();
+  if (viewType === 'corner_left' || viewType === 'corner_right') return pickCornerFlavor();
+  return null;
+}
+
 // 「周囲を調べる」：現在地のexamineCellsにカスタムイベントがあれば起動し、
 // なければ汎用の「何も見つからなかった」系メッセージをランダムに表示する。
 const EXAMINE_NOTHING_MESSAGES = [
@@ -2945,8 +2970,7 @@ function render() {
       const variant = pickVariant(dungeonData.floor, player.x, player.y, player.facing, viewType);
       viewArea.innerHTML = renderCorridorView(variant, false);
       debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label} viewType:${viewType} 使用画像:${variant.image}`;
-      description.textContent = dungeonData.tileFlavor[posKey]
-        || (viewType === 'straight' ? pickStraightCorridorFlavor() : '');
+      description.textContent = dungeonData.tileFlavor[posKey] || pickGenericFlavor(viewType) || '';
 
       const forwardBtn = document.createElement('button');
       forwardBtn.textContent = '前へ進む';
@@ -3017,10 +3041,8 @@ function render() {
         description.textContent = dynText;
       } else if (dungeonData.tileFlavor[posKey]) {
         description.textContent = dungeonData.tileFlavor[posKey];
-      } else if (viewType === 'straight') {
-        description.textContent = pickStraightCorridorFlavor();
       } else {
-        description.textContent = '';
+        description.textContent = pickGenericFlavor(viewType) || '';
       }
     }
 
