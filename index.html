@@ -2717,7 +2717,20 @@ function pickGenericFlavor(viewType){
   if (viewType === 'corner_left' || viewType === 'corner_right') return pickCornerFlavor();
   if (viewType === 't_junction') return pickTJunctionFlavor();
   if (viewType === 'cross_junction') return pickCrossJunctionFlavor();
+  if (viewType === 'dead_end') return pickDeadEndFlavor();
   return null;
+}
+
+// 行き止まり（viewType==='dead_end'）用の汎用フレーバーテキスト。
+const DEAD_END_FLAVORS = [
+  '通路はここで終わり、頑丈な壁に行き手を阻まれている。',
+  '行き止まりだ。前方には固い壁が立ちはだかっている。',
+  '道は突き当たり、これ以上先へは進めそうにない。',
+  '通路の終点だ。壁で行き止まりになっている。',
+  '前方は行き止まりとなっており、奥へ進む道は見当たらない。',
+];
+function pickDeadEndFlavor(){
+  return DEAD_END_FLAVORS[Math.floor(Math.random() * DEAD_END_FLAVORS.length)];
 }
 
 // 十字路（viewType==='cross_junction'）用の汎用フレーバーテキスト。
