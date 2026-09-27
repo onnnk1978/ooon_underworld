@@ -1912,26 +1912,47 @@ const DUNGEON_FLOORS = {
       }
     },
     trapCells: {},
-    // 10,8は北・西・南の3方向に開けたT字路だが、西向き(facing3)だけは正面・左・右が
-    // すべて開いて見えるため（背後の東は判定されない）誤って十字路と判定されてしまう。
-    // 固定テキストを設定し、向きに関係なく常にT字路の描写になるようにしている。
+    // 3方向・2方向（隣接）に開けた分岐点は、向いている方向によってviewTypeが
+    // t_junction/fork/cross_junction/corner等と変わってしまうため、常に同じ
+    // 描写になるよう固定のテキストを設定している（tileFlavorは向きを問わない）。
     tileFlavor: {
-      "10,8": "ここで通路は三方に分かれ、それぞれ異なる闇へと繋がっている。"
+      "10,8": "ここで通路は三方に分かれ、それぞれ異なる闇へと繋がっている。",
+      "1,8": "三つの道が合流する空間だ。選択肢は三方へと広がっている。",
+      "1,14": "壁と通路が複雑に交差し、三方向への道が形成されている。",
+      "5,8": "三方に開けた通路の交差点だ。どこからでも別の二道へと繋がっている。",
+      "1,4": "ここで通路は直角に折れ、別の区画へと繋がっているようだ。"
     },
     gateCells: {},
     interactCells: {},
     groundItems: {},
     examineCells: {},
-    // 10,15は実際には北方向のみに開けた通路で、東西を向くと壁に正対するだけなのに
+    // 出口が1方向しかない部屋の入口（未実装の部屋7・6・8・9・A）は、開口方向の
+    // 正面・背面(straight/dead_end)以外の左右を向くと実際には壁に正対するだけなのに
     // corner_left/corner_rightの「曲がり角」画像・テキストになってしまうため、
     // 15,9等と同様に壁アップ画像＋壁のテキストに差し替えている。
     viewOverrides: {
       "10,15,1": "wall_03.webp",
-      "10,15,3": "wall_04.webp"
+      "10,15,3": "wall_04.webp",
+      "1,18,1": "wall_02.webp",
+      "1,18,3": "wall_03.webp",
+      "5,4,0": "wall_01.webp",
+      "5,4,2": "wall_04.webp",
+      "5,10,1": "wall_02.webp",
+      "5,10,3": "wall_01.webp",
+      "6,14,0": "wall_03.webp",
+      "6,14,2": "wall_04.webp"
     },
     tileFlavorByFacing: {
       "10,15,1": pickWallFacingFlavor,
-      "10,15,3": pickWallFacingFlavor
+      "10,15,3": pickWallFacingFlavor,
+      "1,18,1": pickWallFacingFlavor,
+      "1,18,3": pickWallFacingFlavor,
+      "5,4,0": pickWallFacingFlavor,
+      "5,4,2": pickWallFacingFlavor,
+      "5,10,1": pickWallFacingFlavor,
+      "5,10,3": pickWallFacingFlavor,
+      "6,14,0": pickWallFacingFlavor,
+      "6,14,2": pickWallFacingFlavor
     }
   }
 };
