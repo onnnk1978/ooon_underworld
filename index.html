@@ -1500,7 +1500,7 @@ function renderStatusPanel(){
 // images/ 配下の画像はファイル名を変えずに中身だけ差し替えることがあるため、
 // URLにバージョン番号を付けてブラウザキャッシュを回避する。画像を差し替えたら
 // このバージョンを上げること（内容自体は何でもよく、変わっていれば新規URL扱いになる）。
-const IMAGE_VERSION = '20260927a';
+const IMAGE_VERSION = '20260927b';
 function imageUrl(filename){
   return `images/${filename}?v=${IMAGE_VERSION}`;
 }
@@ -2454,6 +2454,7 @@ const AVAILABLE_IMAGE_FILES = new Set([
   "room_well.webp",
   "room_outside_sleep_bedding.webp",
   "room_hole.webp",
+  "room_exile_leader.webp",
   "gate_entrance.webp",
   "wall_01.webp",
   "wall_02.webp",
