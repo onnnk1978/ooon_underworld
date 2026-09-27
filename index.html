@@ -1192,10 +1192,14 @@ function openStatusPanel(){
  if (!player) return;
  renderStatusPanel();
  document.getElementById('status-overlay').classList.remove('hidden');
+ // #nav-controlsは position:fixed で常時最前面に表示されるため、IDセレクタより
+ // 優先度の低い.hiddenクラスでは隠せない。インラインstyleで直接隠す。
+ document.getElementById('nav-controls').style.display = 'none';
 }
 
 function closeStatusPanel(){
  document.getElementById('status-overlay').classList.add('hidden');
+ document.getElementById('nav-controls').style.display = '';
 }
 
 // player.inventory内のitem（type: 'weapon'|'armor'）をplayer.equipped[type]に装備する。
