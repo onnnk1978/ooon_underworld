@@ -2703,13 +2703,17 @@ function renderSleepMenu(){
   description.classList.remove('hidden');
   combatArea.classList.add('hidden');
 
+  // 野宿かつ寝具を持っていない場合は専用の絵を用意していないため、
+  // viewAreaは直前（睡眠メニューを開く前）の通路表示のまま変更しない。
   const sleepImage = sleepState.mode === 'settlement'
     ? 'room_exile_sleep.webp'
     : (hasBedding() ? 'room_outside_sleep_bedding.webp' : null);
-  viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(sleepImage)
-    ? imageOrPlaceholder(sleepImage, '寝床')
-    : `<div style="width:480px;height:320px;background:#223;display:flex;align-items:center;justify-content:center;color:#aaa;">[睡眠]</div>`;
-  debugInfo.textContent = '';
+  if (sleepImage) {
+    viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(sleepImage)
+      ? imageOrPlaceholder(sleepImage, '寝床')
+      : `<div style="width:480px;height:320px;background:#223;display:flex;align-items:center;justify-content:center;color:#aaa;">[睡眠]</div>`;
+    debugInfo.textContent = '';
+  }
   description.textContent = sleepState.mode === 'outside'
     ? 'どれくらい眠る？（野宿は何かに襲われて目を覚ますかもしれない）'
     : 'どれくらい眠る？';
