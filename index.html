@@ -1208,6 +1208,7 @@ function renderHUD(){
    { l:'運',    v:player.lk,                         cls:'' },
    { l:'食料',   v:`${food}日分`,                     cls:foodCls },
    { l:'積載',   v:`${wtCur}/${wtMax}`,               cls:wtCls },
+   { l:'松明',   v:`${torchCount()}本`,               cls:'' },
   ].map(c => `<div class="mh-cell ${c.cls}"><span class="lbl">${c.l}</span><span class="val">${c.v}</span></div>`).join('');
  }
 }
@@ -1348,6 +1349,7 @@ function renderStatusPanel(){
   ['経験値', player.ap, 'var(--gold)'],
   ['LV', player.level, 'var(--gold)'],
   ['食料', `${food}日分`, foodColor],
+  ['松明', `${torchCount()}本`, 'var(--white)'],
  ].map(([l, v, c]) => `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:6px 8px;text-align:center">
    <div style="font-size:calc(var(--font-sm) - 1px);color:var(--dim);margin-bottom:3px">${l}</div>
    <div style="font-size:var(--font-base);color:${c}">${v}</div>
@@ -2859,14 +2861,28 @@ function hasTorchLit(){
 // フロア4以降でのみ松明の燃焼時間を消費する（フロア3以前は光源を必要としないため）。
 // 燃焼時間が尽きた場合、所持品に予備があれば自動的に次の1本を消費して点け直す
 // （食料の自動消費と同様の扱い）。予備が無ければ0のまま＝暗闇になる。
+function torchCount(){
+  return (player.inventory || []).filter(i => i.name === '松明').length;
+}
+
 function tickTorch(minutes){
   if (!dungeonData || dungeonData.floor < 4) return;
+  const wasLit = hasTorchLit();
   player.torchRemainingMinutes = (player.torchRemainingMinutes || 0) - minutes;
   while (player.torchRemainingMinutes <= 0) {
     const idx = (player.inventory || []).findIndex(i => i.name === '松明');
     if (idx === -1) { player.torchRemainingMinutes = 0; break; }
     player.inventory.splice(idx, 1);
     player.torchRemainingMinutes += TORCH_BURN_MINUTES;
+  }
+  // 明かりの有無が変わった瞬間だけ知らせる（すでに暗闇/点灯中の状態が続いている間は
+  // 毎回表示しない）。一度の判定で複数本を使い切って結局暗闇になった場合は、
+  // 「新しい松明に火を灯した」ではなく「燃え尽きた」を優先する（最終状態で判断する）。
+  const isLit = hasTorchLit();
+  if (isLit && !wasLit) {
+    _dungeonMessage = '新しい松明に火を灯した。';
+  } else if (!isLit && wasLit) {
+    _dungeonMessage = '松明が燃え尽きてしまった。あたりが真っ暗になった。';
   }
 }
 
