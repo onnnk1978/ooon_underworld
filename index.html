@@ -2322,8 +2322,10 @@ const diceStr = dice => `[${dice.join(',')}]`;
 
 // ── モンスター定義（MR = Monster Rating。戦闘力とHPを兼ねる単一値）。
 //    単体は{name, mr}、複数体は{name, enemies:[{name, mr}, ...]}で定義する（OOON本家のenemies配列に準拠）。
+// isHumanoid: コボルド・ゴブリン・オーク・トロルなど人間型の種族。死体を露店に
+// 持ち込んでも食料と交換できない（tradeCorpseForFood()参照）。
 const MONSTER_DEFS = {
-  ambush_goblins: { name: 'ゴブリンの群れ', enemies: [
+  ambush_goblins: { name: 'ゴブリンの群れ', isHumanoid: true, enemies: [
     { name: 'ゴブリン(1)', mr: 5 },
     { name: 'ゴブリン(2)', mr: 5 },
     { name: 'ゴブリン(3)', mr: 5 },
@@ -2334,8 +2336,8 @@ const MONSTER_DEFS = {
   wander_centipede: { name: '巨大ムカデ',       mr: 10 },
   wander_rat:       { name: '巨大ネズミ',       mr: 12 },
   wander_larva:     { name: '巨大な幼虫',       mr: 10 },
-  wander_kobold:    { name: '追放されたコボルド', mr: 10 },
-  wander_goblin:    { name: '追放されたゴブリン', mr: 20 },
+  wander_kobold:    { name: '追放されたコボルド', mr: 10, isHumanoid: true },
+  wander_goblin:    { name: '追放されたゴブリン', mr: 20, isHumanoid: true },
 };
 
 // ── 魔法使い専用の戦闘用呪文（OOON本家SPELLS_L1のうち、戦闘中に使えるものだけを移植）。
@@ -2747,9 +2749,20 @@ function sellWeaponItem(index){
 
 // モンスターの死体1体につき交換できる食料の日数。
 const CORPSE_FOOD_TRADE_DAYS = 1;
+// 露店で一度だけ表示する店主の台詞（renderShop()が読んだら即座にクリアする）。
+let _shopMessage = null;
 function tradeCorpseForFood(index){
   const item = player.inventory[index];
   if (!item || item.type !== 'corpse') return;
+  // コボルド・ゴブリン・オーク・トロルなど人間型の死体は（現状）食べられないため、
+  // 店主に拒否される。交換は成立せず、死体もそのまま残るが、人を食おうとしたこと自体が
+  // 性格を混沌側へ10動かす。
+  if (item.isHumanoid) {
+    _shopMessage = '店主「これを食おうってのか？　何考えてるんだ！　うちじゃ引き取れないよ！」';
+    changeAlignment(0, -10, player);
+    render();
+    return;
+  }
   player.inventory.splice(index, 1);
   player._food = (player._food || 0) + CORPSE_FOOD_TRADE_DAYS;
   render();
@@ -2792,7 +2805,8 @@ function renderShop(){
     ? imageOrPlaceholder('shop_stall.webp', '露店')
     : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[露店]</div>`;
   debugInfo.textContent = `所持金: ${formatMoney()}`;
-  description.textContent = '雑多な品を並べた露店だ。欲しいものはあるか。不要な武器は売ることもできる。';
+  description.textContent = _shopMessage || '雑多な品を並べた露店だ。欲しいものはあるか。不要な武器は売ることもできる。';
+  _shopMessage = null;
 
   SHOP_ITEMS.forEach(item => {
     const ok = totalCP() >= Math.round(item.cost * 100);
@@ -3624,11 +3638,15 @@ function _grantCombatVictory(){
   // 死体は一つしか持ち運べない（複数体を倒した場合は先頭の敵の死体を対象にする）。
   // 既に死体を運んでいる場合は諦める。持ち帰るかどうかは「続ける」画面でプレイヤーが選ぶ
   // （cs.pendingCorpseNameが設定されている間、render()が持ち帰る／置いていくの選択肢を出す）。
+  // isHumanoidはコボルド・ゴブリン・オーク・トロルなど人間型の種族の死体に付き、
+  // 露店では食料と交換できない（tradeCorpseForFood()参照）。
   const corpseName = `${cs.enemies[0].name}の死体`;
+  const corpseIsHumanoid = !!(MONSTER_DEFS[cs.combatId] && MONSTER_DEFS[cs.combatId].isHumanoid);
   if ((player.inventory || []).some(i => i.type === 'corpse')) {
     cs.log.push(`${corpseName}を見つけたが、これ以上死体は運べない。`);
   } else {
     cs.pendingCorpseName = corpseName;
+    cs.pendingCorpseIsHumanoid = corpseIsHumanoid;
   }
 
   if (cs.onWin) cs.onWin();
@@ -3719,6 +3737,7 @@ function renderCombat() {
       takeBtn.textContent = `${cs.pendingCorpseName}を持ち帰る`;
       takeBtn.onclick = () => {
         player.inventory.push({ type: 'corpse', name: cs.pendingCorpseName, weight: 60,
+          isHumanoid: cs.pendingCorpseIsHumanoid,
           desc: '討伐した魔物の死体。居住地の露店に持ち帰れば食料と交換できる。' });
         combatState = null;
         render();
