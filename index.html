@@ -2092,6 +2092,26 @@ function navIcon(name){
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${NAV_ICON_PATHS[name]}</svg>`;
 }
 
+// #nav-controlsへのキーボードショートカット。対応するボタンが実際に存在する
+// （＝通路移動中で、能力値テストやチャット入力欄にフォーカスが無い）ときだけ
+// 反応する。ボタンをそのままクリックすることで、各onclickの実装を再利用する。
+const NAV_KEY_TO_SELECTOR = {
+  'ArrowUp': '.nav-forward',
+  'ArrowLeft': '.nav-left',
+  'ArrowRight': '.nav-right',
+  ' ': '.nav-examine',
+  'z': '.nav-sleep',
+  'Z': '.nav-sleep',
+};
+document.addEventListener('keydown', (e) => {
+  const selector = NAV_KEY_TO_SELECTOR[e.key];
+  if (!selector) return;
+  const btn = document.querySelector('#nav-controls ' + selector);
+  if (!btn) return;
+  e.preventDefault();
+  btn.click();
+});
+
 // ============================================================
 // タイル判定
 // ============================================================
