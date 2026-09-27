@@ -2119,15 +2119,78 @@ const DUNGEON_FLOORS = {
       }
     },
     trapCells: {},
+    // 3方向に開けた分岐点は、向いている方向によってviewTypeがt_junction/fork/
+    // cross_junctionと変わってしまうため、常に同じ描写になるよう固定のテキストを
+    // 設定している（tileFlavorは向きを問わない）。
     tileFlavor: {
-      "6,14": "今までに比べてここは本当に真っ暗だ。この先は明かりがないと進めない。"
+      "6,14": "今までに比べてここは本当に真っ暗だ。この先は明かりがないと進めない。",
+      "6,10": "ここは道が三方に分岐する交差点だ。",
+      "8,10": "三つの通路がひとつに交わる、T字状の分岐点だ。",
+      "10,3": "通路が三方向に交差する場所に出た。",
+      "6,6": "道が三つに分かれ、それぞれ奥へと伸びている。",
+      "2,5": "三方向へと通路が伸びる、T字の分岐通路だ。",
+      "3,3": "三方に開けた通路の交差点だ。どこからでも別の二道へと繋がっている。",
+      "3,1": "三方へ伸びる通路の交わるところだ。それぞれの先から異なる空気が漂っている。"
     },
     gateCells: {},
     interactCells: {},
     groundItems: {},
     examineCells: {},
-    viewOverrides: {},
-    tileFlavorByFacing: {}
+    // 出口が1方向しかない座標は、開口方向の正面・背面(straight/dead_end)以外を
+    // 向くと実際には壁に正対するだけなのにcorner_left/corner_rightの「曲がり角」
+    // 画像・テキストになってしまうため、壁アップ画像＋壁のテキストに差し替えている。
+    viewOverrides: {
+      "8,11,1": "wall_01.webp",
+      "8,11,3": "wall_02.webp",
+      "12,11,1": "wall_03.webp",
+      "12,11,3": "wall_04.webp",
+      "12,13,1": "wall_01.webp",
+      "12,13,3": "wall_03.webp",
+      "2,6,1": "wall_02.webp",
+      "2,6,3": "wall_04.webp",
+      "13,9,0": "wall_01.webp",
+      "13,9,2": "wall_02.webp",
+      "12,7,0": "wall_03.webp",
+      "12,7,2": "wall_04.webp",
+      "13,3,0": "wall_01.webp",
+      "13,3,2": "wall_03.webp",
+      "7,3,0": "wall_02.webp",
+      "7,3,2": "wall_04.webp",
+      "5,9,0": "wall_01.webp",
+      "5,9,2": "wall_02.webp",
+      "5,3,0": "wall_03.webp",
+      "5,3,2": "wall_04.webp",
+      "1,1,0": "wall_01.webp",
+      "1,1,2": "wall_02.webp",
+      "13,1,0": "wall_03.webp",
+      "13,1,2": "wall_04.webp"
+    },
+    tileFlavorByFacing: {
+      "8,11,1": pickWallFacingFlavor,
+      "8,11,3": pickWallFacingFlavor,
+      "12,11,1": pickWallFacingFlavor,
+      "12,11,3": pickWallFacingFlavor,
+      "12,13,1": pickWallFacingFlavor,
+      "12,13,3": pickWallFacingFlavor,
+      "2,6,1": pickWallFacingFlavor,
+      "2,6,3": pickWallFacingFlavor,
+      "13,9,0": pickWallFacingFlavor,
+      "13,9,2": pickWallFacingFlavor,
+      "12,7,0": pickWallFacingFlavor,
+      "12,7,2": pickWallFacingFlavor,
+      "13,3,0": pickWallFacingFlavor,
+      "13,3,2": pickWallFacingFlavor,
+      "7,3,0": pickWallFacingFlavor,
+      "7,3,2": pickWallFacingFlavor,
+      "5,9,0": pickWallFacingFlavor,
+      "5,9,2": pickWallFacingFlavor,
+      "5,3,0": pickWallFacingFlavor,
+      "5,3,2": pickWallFacingFlavor,
+      "1,1,0": pickWallFacingFlavor,
+      "1,1,2": pickWallFacingFlavor,
+      "13,1,0": pickWallFacingFlavor,
+      "13,1,2": pickWallFacingFlavor
+    }
   }
 };
 
