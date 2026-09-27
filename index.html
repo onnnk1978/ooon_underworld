@@ -2716,7 +2716,25 @@ function pickGenericFlavor(viewType){
   if (viewType === 'straight') return pickStraightCorridorFlavor();
   if (viewType === 'corner_left' || viewType === 'corner_right') return pickCornerFlavor();
   if (viewType === 't_junction') return pickTJunctionFlavor();
+  if (viewType === 'cross_junction') return pickCrossJunctionFlavor();
   return null;
+}
+
+// 十字路（viewType==='cross_junction'）用の汎用フレーバーテキスト。
+const CROSS_JUNCTION_FLAVORS = [
+  'ここは道が四方に交差する十字路だ。',
+  '四つの通路がひとつに交わる、大きな交差点に出た。',
+  '通路は前後左右、四方向へとまっすぐ伸びている。',
+  '四方に分岐する十字状の通路だ。',
+  '道が四方に開け、それぞれの奥へと繋がっている。',
+  'ここは四つの道が交差する分岐点だ。',
+  '四方へと伸びる通路の交わるところだ。',
+  '四方に道が分かれ、それぞれ異なる気配を潜ませている。',
+  '壁に囲まれた狭い空間から、四方向へと通路が広がっている。',
+  '四つの通路が交わる中心点だ。どの方向へも足を進められる。',
+];
+function pickCrossJunctionFlavor(){
+  return CROSS_JUNCTION_FLAVORS[Math.floor(Math.random() * CROSS_JUNCTION_FLAVORS.length)];
 }
 
 // T字路（viewType==='t_junction'）用の汎用フレーバーテキスト。
