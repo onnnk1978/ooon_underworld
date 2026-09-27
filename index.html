@@ -1823,7 +1823,21 @@ const DUNGEON_FLOORS = {
       "14,9": "三方向へと通路が伸びる、T字の分岐通路だ。",
       "11,9": "通路は急角度で折れ曲がっている。",
       "14,3": "直角に曲がる角の先から、冷たい空気が流れ込んでくる。",
-      "11,3": "道は急な角を描き、視界を遮っている。"
+      "11,3": "道は急な角を描き、視界を遮っている。",
+      "3,9": "直角に折れ曲がった角が目前に迫っている。"
+    },
+    // 座標＋向きの組み合わせでだけ意味を持つフレーバーテキスト（tileFlavorと違い向きを問う）。
+    // 値が関数の場合は描画のたびに呼び出す（WALL_FACING_FLAVORS等のランダムプールを使う場合）。
+    // 15,9・1,5・3,1は、viewOverridesで曲がり角の絵をあえて素っ気ない壁アップ画像に
+    // 差し替えている向きがあるため、テキストも絵に合わせて壁の描写にしている。
+    tileFlavorByFacing: {
+      "15,9,1": "行く手を阻む壁に、古びたレバーが据え付けられている。",
+      "15,9,0": pickWallFacingFlavor,
+      "15,9,2": pickWallFacingFlavor,
+      "1,5,0": pickWallFacingFlavor,
+      "1,5,2": pickWallFacingFlavor,
+      "3,1,1": pickWallFacingFlavor,
+      "3,1,3": pickWallFacingFlavor
     },
     // 落とし格子（ゲート）。閉じている間は壁と同じ扱い（isFloorがfalseを返す）。
     // レバーを引くとopenがtrueになり、その瞬間から通行可能になる。
@@ -3144,7 +3158,10 @@ function render() {
     viewArea.innerHTML = renderCorridorView(variant, imageFlipped);
     debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label} viewType:${viewType} 使用画像:${variant.image}${imageFlipped ? '（反転表示）' : ''}`;
 
-    // 罠の結果メッセージ（1回限り）→ なければ動的フレーバー → なければタイル固有のフレーバーテキスト → なければ空
+    // 罠の結果メッセージ（1回限り）→ なければ動的フレーバー → なければ座標＋向き固有の
+    // フレーバーテキスト → なければタイル固有のフレーバーテキスト → なければ空
+    const facingFlavor = dungeonData.tileFlavorByFacing
+      && dungeonData.tileFlavorByFacing[`${player.x},${player.y},${player.facing}`];
     if (_dungeonMessage) {
       description.textContent = _dungeonMessage;
       _dungeonMessage = null;
@@ -3152,6 +3169,8 @@ function render() {
       const dynText = dungeonData.dynamicFlavor ? dungeonData.dynamicFlavor(player.x, player.y) : null;
       if (dynText != null) {
         description.textContent = dynText;
+      } else if (facingFlavor) {
+        description.textContent = typeof facingFlavor === 'function' ? facingFlavor() : facingFlavor;
       } else if (dungeonData.tileFlavor[posKey]) {
         description.textContent = dungeonData.tileFlavor[posKey];
       } else if (facingWallFromStraight) {
