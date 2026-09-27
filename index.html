@@ -959,7 +959,7 @@ function buildCharacter(){
 
  // ダンジョンクローラー向けの汎用インベントリ枠（中身はOOONの装備システムに準拠しなくてよい）
  pc.inventory = [];
- pc.equipped = { weapon: null, armor: null, footwear: null };
+ pc.equipped = { weapon: null, armor: null, footwear: null, backpack: null, clothing: null };
 
  // 魔法使いはOOON本家のLv1呪文のうち戦闘で使えるものを習得済みとして開始する
  pc.spells = pc.type === 'wizard' ? WIZARD_SPELLS.map(s => ({ ...s })) : [];
@@ -1385,9 +1385,12 @@ function renderStatusPanel(){
  const weapon2 = player.equipped && player.equipped.weapon2;
  const armorItem = player.equipped && player.equipped.armor;
  const footwear = player.equipped && player.equipped.footwear;
+ const backpackItem = player.equipped && player.equipped.backpack;
+ const clothingItem = player.equipped && player.equipped.clothing;
  const isWeaponType = (type) => type === 'weapon' || type === 'weapon2';
  // 武器・防具・履物で表示するステータス行（サンダルはOOON本家準拠で逃走判定+1、
  // ただし劣悪な品のため装備後3か月で履き潰れる＝tickFootwearWear()が自動的に外す）。
+ // 背負い袋・衣服には特別な効果指定が無いため、装備品としては扱うが数値効果は無い。
  const itemStatLabel = (item) => {
   if (isWeaponType(item.type)) return formatWeaponDice(item);
   if (item.type === 'armor') return `防護${item.hits}`;
@@ -1407,7 +1410,7 @@ function renderStatusPanel(){
  const invRow = (item, index) => {
   const ok = item.type === 'weapon' ? canEquipPrimaryWeapon(player, item) : meetsEquipReq(player, item);
   const statLabel = itemStatLabel(item);
-  const reqLabel = item.type === 'footwear' ? '' : `必要ST${item.stReq}${item.dexReq ? `・DEX${item.dexReq}` : ''}`;
+  const reqLabel = (item.type === 'weapon' || item.type === 'armor') ? `必要ST${item.stReq}${item.dexReq ? `・DEX${item.dexReq}` : ''}` : '';
   const dualOk = item.type === 'weapon' && player.type === 'warrior' && canDualWield(player, item);
   const dualBtn = (item.type === 'weapon' && player.type === 'warrior' && !weapon2)
    ? `<button onclick="equipSecondWeapon(${index})" ${dualOk ? '' : 'disabled'} style="background:none;border:1px solid var(--border);color:${dualOk ? 'var(--dim)' : '#5a5248'};font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:4px 8px;cursor:${dualOk ? 'pointer' : 'default'};border-radius:2px;opacity:${dualOk ? '1' : '.5'}">2本目に装備</button>`
@@ -1426,7 +1429,7 @@ function renderStatusPanel(){
 
  const invItemsHtml = (player.inventory || [])
   .map((item, index) => ({ item, index }))
-  .filter(({ item }) => item.type === 'weapon' || item.type === 'armor' || item.type === 'footwear')
+  .filter(({ item }) => item.type === 'weapon' || item.type === 'armor' || item.type === 'footwear' || item.type === 'backpack' || item.type === 'clothing')
   .map(({ item, index }) => invRow(item, index))
   .join('');
 
@@ -1435,6 +1438,8 @@ function renderStatusPanel(){
   (player.type === 'warrior' ? equippedRow('武器2', weapon2, 'weapon2') : '') +
   equippedRow('防具', armorItem, 'armor') +
   equippedRow('履物', footwear, 'footwear') +
+  equippedRow('背負い袋', backpackItem, 'backpack') +
+  equippedRow('衣服', clothingItem, 'clothing') +
   invItemsHtml;
 
  // 死体（運んでいるときだけ表示。食料と交換できない死体でも、ここから手放せる）
@@ -2658,9 +2663,9 @@ function getArmorValue(pc){
 }
 
 // ── 積載量（OOON本家 weightPossible/calcTotalWeight/checkWeightPenalty から移植。
-//    衣服による×100ボーナスは対象の装備システムが無いため省略し、常にST×50wuとする）。
-//    現状インベントリの装備品には重量(weight)フィールドが無いためcurは常に0になるが、
-//    今後アイテムにweightを持たせれば自動的にここへ反映される。
+//    OOON本家の「防寒着と荷物袋」による×100ボーナスは、本作では背負い袋・衣服が
+//    別々のアイテムに分かれておりゲームデザイン上の効果指定も無いため実装せず、
+//    常にST×50wuとする）。
 function weightPossible(pc){
   return (pc.st || 0) * 50;
 }
@@ -2673,6 +2678,8 @@ function calcTotalWeight(pc){
     if (pc.equipped.weapon2) w += pc.equipped.weapon2.weight || 0;
     if (pc.equipped.armor) w += pc.equipped.armor.weight || 0;
     if (pc.equipped.footwear) w += pc.equipped.footwear.weight || 0;
+    if (pc.equipped.backpack) w += pc.equipped.backpack.weight || 0;
+    if (pc.equipped.clothing) w += pc.equipped.clothing.weight || 0;
   }
   return w;
 }
@@ -3022,6 +3029,8 @@ function countOwnedByName(name){
   if (eq.weapon2 && eq.weapon2.name === name) n++;
   if (eq.armor && eq.armor.name === name) n++;
   if (eq.footwear && eq.footwear.name === name) n++;
+  if (eq.backpack && eq.backpack.name === name) n++;
+  if (eq.clothing && eq.clothing.name === name) n++;
   return n;
 }
 
@@ -3041,11 +3050,11 @@ const SHOP_ITEMS = [
   { id: 'backpack', name: '背負い袋', cost: 5, unitLabel: '',
     statLine: '重量5',
     getCount(){ return countOwnedByName('背負い袋'); },
-    buy(){ player.inventory.push({ type: 'misc', name: '背負い袋', weight: 5, desc: '荷物を運ぶための古びた背負い袋。' }); } },
+    buy(){ player.inventory.push({ type: 'backpack', name: '背負い袋', weight: 5 }); } },
   { id: 'usedClothes', name: '誰かが着ていた衣服', cost: 5, unitLabel: '',
     statLine: '重量5',
     getCount(){ return countOwnedByName('誰かが着ていた衣服'); },
-    buy(){ player.inventory.push({ type: 'misc', name: '誰かが着ていた衣服', weight: 5, desc: '誰かが着ていたという、着古した衣服。' }); } },
+    buy(){ player.inventory.push({ type: 'clothing', name: '誰かが着ていた衣服', weight: 5 }); } },
   { id: 'sandals', name: 'サンダル', cost: 2, unitLabel: '',
     statLine: '装備中は逃走判定に+1　劣悪な品のため装備後3か月で履き潰れる　重量2',
     getCount(){ return countOwnedByName('サンダル'); },
