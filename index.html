@@ -1813,7 +1813,17 @@ const DUNGEON_FLOORS = {
     trapCells: {
       "9,5": { id: "centipede_1", type: "monster", combatId: "giant_centipede" }
     },
-    tileFlavor: {},
+    // 3方向・2方向に開けた分岐点は、向いている方向によってviewTypeが
+    // t_junction/fork/cross_junction/corner等と変わってしまうため、常に同じ
+    // 描写になるよう固定のテキストを設定している（tileFlavorは向きを問わない）。
+    tileFlavor: {
+      "7,5": "通路が三方向に交差する場所に出た。",
+      "11,5": "道が三つに分かれ、それぞれ奥へと伸びている。",
+      "14,9": "三方向へと通路が伸びる、T字の分岐通路だ。",
+      "11,9": "通路は急角度で折れ曲がっている。",
+      "14,3": "直角に曲がる角の先から、冷たい空気が流れ込んでくる。",
+      "11,3": "道は急な角を描き、視界を遮っている。"
+    },
     // 落とし格子（ゲート）。閉じている間は壁と同じ扱い（isFloorがfalseを返す）。
     // レバーを引くとopenがtrueになり、その瞬間から通行可能になる。
     gateCells: {
