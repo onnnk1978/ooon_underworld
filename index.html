@@ -2059,6 +2059,7 @@ const AVAILABLE_IMAGE_FILES = new Set([
   "room_stairs_down.webp",
   "room_exile_settlement.webp",
   "room_exile_sleep.webp",
+  "room_outside_sleep.webp",
   "gate_entrance.webp",
   "wall_01.webp",
   "wall_02.webp",
@@ -2702,8 +2703,9 @@ function renderSleepMenu(){
   description.classList.remove('hidden');
   combatArea.classList.add('hidden');
 
-  viewArea.innerHTML = (sleepState.mode === 'settlement' && AVAILABLE_IMAGE_FILES.has('room_exile_sleep.webp'))
-    ? imageOrPlaceholder('room_exile_sleep.webp', '寝床')
+  const sleepImage = sleepState.mode === 'settlement' ? 'room_exile_sleep.webp' : 'room_outside_sleep.webp';
+  viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(sleepImage)
+    ? imageOrPlaceholder(sleepImage, '寝床')
     : `<div style="width:480px;height:320px;background:#223;display:flex;align-items:center;justify-content:center;color:#aaa;">[睡眠]</div>`;
   debugInfo.textContent = '';
   description.textContent = sleepState.mode === 'outside'
