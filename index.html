@@ -4804,8 +4804,37 @@ function startCombat(combatId, { onWin, onFlee, count } = {}) {
     uiMode: 'action', // 'action' | 'spellSelect' | 'ttyfLevel'
     vorpalActive: false, // 鋭き刃の効果待ち（次の「戦う」で武器ダイス2倍）
     companionAction: 'attack', // 'attack' | 'defend'（同行者がいる間、戦う前に選べる。resolveCombatRound()参照）
+    round: 0, // 経過ラウンド数（遠距離フェーズを初回のみに限定するために使う。resolveCombatRound()参照）
   };
   render();
+}
+
+// 遠距離武器かどうか（OOON本家isRangedWeapon()準拠）。
+function isRangedWeapon(item){
+  return !!(item && item.isRanged);
+}
+
+// ── 遠距離フェーズ（最初のラウンドのみ。OOON本家 resolveRound()の遠距離フェーズに相当）──
+// 現状、本作には弓などの遠距離武器が一切存在しない（プレイヤー・同行者とも
+// equippedRangedを持ち得ない）ため、実際には何も起きず空振りする。将来的に
+// 遠距離武器を導入する際は、ここでequippedRangedを持つ味方それぞれの命中判定・
+// ダメージを解決し、近接フェーズのパーティ合計に加算するボーナスと、消費した
+// 矢の処理などを返すようにする（近接ロールとは独立した別ラインの処理として、
+// 近接フェーズ本体には手を入れずに済むようにしてある）。
+function resolveRangedPhase(){
+  const cs = combatState;
+  const shooters = [
+    { pc: player, label: 'あなた' },
+    ...(player.companion && player.companion.con > 0 ? [{ pc: player.companion, label: player.companion.name }] : []),
+  ].filter(({ pc }) => isRangedWeapon(pc.equippedRanged));
+  if (shooters.length === 0) return { bonus: 0 };
+
+  // TODO: 遠距離武器導入時にここへ命中判定・ダメージ処理を実装する。
+  let bonus = 0;
+  shooters.forEach(({ label, pc }) => {
+    cs.log.push(`【遠距離】${label}の${pc.equippedRanged.name}による攻撃（未実装）`);
+  });
+  return { bonus };
 }
 
 // 1ラウンド分の戦闘解決：プレイヤー側ロール合計 vs 生存する敵それぞれのロールの合計を比較し、
@@ -4818,6 +4847,7 @@ function startCombat(combatId, { onWin, onFlee, count } = {}) {
 // 代わりに「様子を見る」扱いになり、防具点が2倍になる＝defending:trueに対応）。
 function resolveCombatRound(pcAction){
   const cs = combatState;
+  cs.round = (cs.round || 0) + 1;
   let pRoll, logHeader;
   if (pcAction) {
     pRoll = { total: pcAction.total };
@@ -4848,14 +4878,18 @@ function resolveCombatRound(pcAction){
       logHeader += `／${companion.name}(${cRoll.weaponName}): ${cRoll.diceCount}D6=${cRoll.diceTotal}+加算${cAddsTotal >= 0 ? '+' : ''}${cAddsTotal} = ${cRoll.total}`;
     }
   }
-  const partyTotal = pRoll.total + (cRoll ? cRoll.total : 0);
+  // 遠距離フェーズ（OOON本家準拠で最初のラウンドのみ）。現状は遠距離武器が
+  // 存在しないため常にbonus=0の空振りだが、将来の遠距離武器導入時はここで
+  // 加算されたボーナスがそのまま近接フェーズのパーティ合計に乗る。
+  const rangedResult = cs.round === 1 ? resolveRangedPhase() : { bonus: 0 };
+  const partyTotal = pRoll.total + (cRoll ? cRoll.total : 0) + rangedResult.bonus;
 
   const aliveEnemies = cs.enemies.filter(e => e.curMR > 0);
   const eRolls = aliveEnemies.map(e => ({ enemy: e, roll: monsterRoll(e.curMR) }));
   const eTotal = eRolls.reduce((s, r) => s + r.roll.total, 0);
 
   const eDetail = eRolls.map(r => `${r.enemy.name}:${r.roll.diceCount}D6+${r.roll.flatBonus}=${r.roll.total}`).join('／');
-  cs.log.push(`${logHeader}／${eDetail} → 敵合計${eTotal}`);
+  cs.log.push(`【近接】${logHeader}／${eDetail} → 敵合計${eTotal}`);
 
   if (partyTotal > eTotal) {
     const totalDmg = partyTotal - eTotal;
@@ -4974,7 +5008,7 @@ function castMagicBolt(level, target){
   player.st -= cost;
   const dmg = player.iq * level;
   target.curMR = Math.max(0, target.curMR - dmg);
-  cs.log.push(`${player.name}は${sp.name} Lv${level}を唱えた！ ${target.name}に${dmg}ダメージ！（${enemyConditionLabel(target.curMR, target.mr)}／強さ-${cost}）`);
+  cs.log.push(`【魔法】${player.name}は${sp.name} Lv${level}を唱えた！ ${target.name}に${dmg}ダメージ！（${enemyConditionLabel(target.curMR, target.mr)}／強さ-${cost}）`);
   cs.uiMode = 'action';
 
   if (cs.enemies.every(e => e.curMR <= 0)) {
