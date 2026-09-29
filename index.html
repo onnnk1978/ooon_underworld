@@ -2562,7 +2562,12 @@ const DUNGEON_FLOORS = {
       "5,10,3": "wall_01.webp",
       "5,10,2": "room_well.webp",
       "6,14,0": "wall_03.webp",
-      "6,14,2": "wall_04.webp"
+      "6,14,2": "wall_04.webp",
+      // 10,1は南北の行き止まり通路（北は壁、南のみ開口）で、東西は常に壁。
+      // 東西を向くと南への開口によりcorner_left/corner_rightになってしまうため、
+      // 他の行き止まり通路と同様に壁アップ画像＋壁のテキストに差し替える。
+      "10,1,1": "wall_02.webp",
+      "10,1,3": "wall_03.webp"
     },
     tileFlavorByFacing: {
       "10,15,1": pickWallFacingFlavor,
@@ -2573,7 +2578,9 @@ const DUNGEON_FLOORS = {
       "5,10,3": pickWallFacingFlavor,
       "5,10,2": "通路の真ん中に古びた井戸がある。\n井戸の向こう側で通路は行き止まりになっている。\n南の壁面には大きく文章が刻まれている。\n「居住区への君の貢献が皆を豊かにする！」",
       "6,14,0": pickWallFacingFlavor,
-      "6,14,2": pickWallFacingFlavor
+      "6,14,2": pickWallFacingFlavor,
+      "10,1,1": pickWallFacingFlavor,
+      "10,1,3": pickWallFacingFlavor
     }
   },
   // フロア3(1,18・部屋A)の下り階段からつながる、フロア4。添付マップ(map-8.txt)を反映。
