@@ -1342,7 +1342,7 @@ function enterDungeon(pc){
   x: 3, y: 7, facing: 0, // 「1. 能力値テスト後に遷移する場所（北向き）」
   ...pc,
  };
- GAME_TIME = { totalMinutes: 0, startYear: 400 };
+ GAME_TIME = { totalMinutes: 0 };
 
  document.getElementById('chargen-screen').classList.add('hidden');
  document.getElementById('dungeon-screen').classList.remove('hidden');
@@ -2204,33 +2204,18 @@ updateContinueButtonState();
 // 2) ダンジョンビューロジック
 // ══════════════════════════════════════════════
 
-// ── ゲーム内時計（OOON本家 GAME_TIME/formatDate() を踏襲した簡易版。
-//    OOON本家は日単位だが、このダンジョンクローラーは1歩=5分でより細かく進む）。
-const MONTHS_JP = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-const DAYS_PER_MONTH = 30;
-const MONTHS_PER_YEAR = 12;
-const DAYS_PER_YEAR = DAYS_PER_MONTH * MONTHS_PER_YEAR;
+// ── ゲーム内時計（1歩=5分で進む。日付は暦ではなく、冒険開始からの経過日数で表示する）。
 const MINUTES_PER_STEP = 5;
 const MINUTES_PER_EXAMINE = 30;
 
-let GAME_TIME = { totalMinutes: 0, startYear: 400 };
-
-function getCurrentDateTime(){
- const totalHours = Math.floor(GAME_TIME.totalMinutes / 60);
- const minute = GAME_TIME.totalMinutes % 60;
- const hour = totalHours % 24;
- const totalDays = Math.floor(totalHours / 24);
- const absDay = GAME_TIME.startYear * DAYS_PER_YEAR + totalDays;
- const year = Math.floor(absDay / DAYS_PER_YEAR);
- const rem = absDay % DAYS_PER_YEAR;
- const month = Math.floor(rem / DAYS_PER_MONTH) + 1;
- const day = (rem % DAYS_PER_MONTH) + 1;
- return { year, month, day, hour, minute };
-}
+let GAME_TIME = { totalMinutes: 0 };
 
 function formatGameDateTime(){
- const d = getCurrentDateTime();
- return `${d.year}年 ${MONTHS_JP[d.month - 1]} ${d.day}日 ${String(d.hour).padStart(2, '0')}:${String(d.minute).padStart(2, '0')}`;
+ const totalHours = Math.floor(GAME_TIME.totalMinutes / 60);
+ const hour = totalHours % 24;
+ const minute = GAME_TIME.totalMinutes % 60;
+ const day = Math.floor(totalHours / 24) + 1; // 開始日を1日目とする
+ return `${day}日目 ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
 // 時計をminutes分だけ進める（省略時はMINUTES_PER_STEP＝1歩分）。
