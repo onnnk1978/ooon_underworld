@@ -1592,6 +1592,7 @@ function renderStatusPanel(){
   if (item.type === 'armor') return `防護${item.hits}`;
   if (item.type === 'footwear') return '逃走判定+1（3か月で履き潰れる）';
   if (item.type === 'backpack') return '積載量が強さ×100に増える';
+  if (item.type === 'misc') return item.desc || '';
   return '';
  };
  const equippedRow = (label, item, type) => `
@@ -1605,6 +1606,14 @@ function renderStatusPanel(){
   </div>`;
 
  const invRow = (item, index) => {
+  // misc（コンパス・寝具など、装備スロットを持たない道具類）は名前と説明だけの
+  // 読み取り専用の行にする（equipItem()には'misc'用の装備欄が無いため）。
+  if (item.type === 'misc') {
+   return `<div style="background:var(--panel);border:1px solid var(--panel2);border-radius:3px;padding:8px;margin-bottom:5px">
+    <span style="font-size:var(--font-sm);color:#f0ece0">${item.name}</span>
+    <div style="font-size:calc(var(--font-sm) - 2px);color:var(--dim)">${itemStatLabel(item)}</div>
+   </div>`;
+  }
   const ok = item.type === 'weapon' ? canEquipPrimaryWeapon(player, item) : meetsEquipReq(player, item);
   const statLabel = itemStatLabel(item);
   const reqLabel = (item.type === 'weapon' || item.type === 'armor') ? `必要ST${item.stReq}${item.dexReq ? `・DEX${item.dexReq}` : ''}` : '';
@@ -1624,9 +1633,11 @@ function renderStatusPanel(){
   </div>`;
  };
 
+ // misc（道具類）は所持品欄に表示するが、松明は専用のHUDカウンター（松明N本）で
+ // 表示済み・燃焼のたびに1本ずつ消費されて出入りが激しいため、ここには出さない。
  const invItemsHtml = (player.inventory || [])
   .map((item, index) => ({ item, index }))
-  .filter(({ item }) => item.type === 'weapon' || item.type === 'armor' || item.type === 'footwear' || item.type === 'backpack' || item.type === 'clothing')
+  .filter(({ item }) => item.type === 'weapon' || item.type === 'armor' || item.type === 'footwear' || item.type === 'backpack' || item.type === 'clothing' || (item.type === 'misc' && item.name !== '松明'))
   .map(({ item, index }) => invRow(item, index))
   .join('');
 
@@ -3724,9 +3735,10 @@ function hasBedding(){
   return (player.inventory || []).some(i => i.name === '寝具');
 }
 // コンパスを持っているかどうか（デバッグ情報欄の向き表示に使う。売却・紛失などで
-// 手放していれば向きがわからなくなる）。
+// 手放していれば向きがわからなくなる）。露店で買う「コンパス」だけでなく、
+// 序章でドワーフから渡される「小さなコンパス」もコンパスとして扱う。
 function hasCompass(){
-  return (player.inventory || []).some(i => i.name === 'コンパス');
+  return (player.inventory || []).some(i => i.name === 'コンパス' || i.name === '小さなコンパス');
 }
 // デバッグ情報欄（座標:(x,y) 向き:...）に出す向きの表示。コンパスを持っていれば
 // 東西南北がそのままわかるが、持っていなければ「不明」になる。
