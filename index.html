@@ -181,6 +181,10 @@ body{display:flex;flex-direction:column;align-items:center;
   /* 本番公開先（Cloudflare Pagesの本番ホスト名）でのみ付与される。開発用の座標・向き・
      viewType等の表示とミニマップを本番からは隠す（付与ロジックはスクリプト冒頭を参照）。 */
   html.debug-hidden #debugInfo, html.debug-hidden #minimap { display: none; }
+  /* コンパス（小さなコンパスを含む）を所持しているときだけ表示する方角表示。
+     #debugInfoと違い、本番公開先でも隠さない（html.debug-hidden配下に置かない）。 */
+  #compassInfo { width:480px; max-width:94vw; font-size:12px; color:var(--dim); margin-top:6px; }
+  #compassInfo:empty { display: none; }
   #description { width:480px; margin-top:10px; font-size:15px; line-height:1.6; min-height:40px; white-space:pre-line; }
   #choices { width:480px; display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
   button { background:#333; color:#eee; border:1px solid #666; padding:8px 14px; cursor:pointer; font-size:14px; border-radius:4px; }
@@ -238,11 +242,12 @@ body{display:flex;flex-direction:column;align-items:center;
   #hud { order: 1; }
   #viewArea { order: 2; }
   #debugInfo { order: 3; }
-  #description { order: 4; }
-  #shop-list { order: 5; }
-  #combatArea { order: 6; }
-  #choices { order: 7; }
-  #minimap-row { order: 8; }
+  #compassInfo { order: 4; }
+  #description { order: 5; }
+  #shop-list { order: 6; }
+  #combatArea { order: 7; }
+  #choices { order: 8; }
+  #minimap-row { order: 9; }
 
   /* ── 通路移動の方向操作＋セーブ等（画面下端に固定表示）。
      上段＝その他のボタン（眠る・調べる・セーブ）、下段＝移動ボタン（左・前進・右）の
@@ -344,7 +349,7 @@ body{display:flex;flex-direction:column;align-items:center;
       min-width: 0;
       order: 1;
     }
-    #hud, #minimap-row, #viewArea, #debugInfo, #description,
+    #hud, #minimap-row, #viewArea, #debugInfo, #compassInfo, #description,
     #shop-list, #combatArea, #choices {
       width: 100% !important;
       max-width: none !important;
@@ -578,6 +583,9 @@ body{display:flex;flex-direction:column;align-items:center;
 <div id="right-pane">
 <div id="viewArea"></div>
 <div id="debugInfo"></div>
+<!-- コンパス（小さなコンパスを含む）を所持しているときだけ方角を表示する。
+     #debugInfoと違い本番公開先でも表示する（render()内のupdateCompassInfo()参照）。 -->
+<div id="compassInfo"></div>
 <div id="description"></div>
 
 <!-- 露店の購入・売却カード一覧（OOON本家 #shop-area の.shop-item/.buy-btnと同じ見た目）。
@@ -3745,6 +3753,13 @@ function hasCompass(){
 function facingDebugLabel(){
   return hasCompass() ? DIRS[player.facing].label : '不明';
 }
+// #compassInfoの表示。#debugInfoと違い本番公開先でも隠さないため、コンパスを
+// 持っているときだけ方角のみを表示し、持っていなければ何も表示しない
+// （render()冒頭で毎回空にした上で、通路移動中のみここから呼ばれる）。
+function updateCompassInfo(){
+  const el = document.getElementById('compassInfo');
+  if (el) el.textContent = hasCompass() ? `方角: ${DIRS[player.facing].label}` : '';
+}
 
 function openShop(){
   shopState = {};
@@ -4620,6 +4635,9 @@ function render() {
   const choices = document.getElementById('choices');
   choices.innerHTML = '';
   document.getElementById('nav-controls').innerHTML = '';
+  // 部屋・露店・戦闘などでは方角の意味が薄いため、通路移動中（下記のコンパス表示
+  // 該当箇所）以外では毎回空にしておく（:emptyで自動的に非表示になる）。
+  document.getElementById('compassInfo').textContent = '';
 
   // 通常はダンジョンビュー（viewArea/debugInfo/description）を表示し、戦闘UI（combatArea）は
   // 隠しておく。戦闘中はrenderCombat()側でこれを反転させる。
@@ -4765,6 +4783,7 @@ function render() {
       const variant = pickVariant(dungeonData.floor, player.x, player.y, player.facing, viewType);
       viewArea.innerHTML = renderCorridorView(variant, false);
       debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${facingDebugLabel()} viewType:${viewType} 使用画像:${variant.image}`;
+      updateCompassInfo();
       description.textContent = dungeonData.tileFlavor[posKey] || pickGenericFlavor(viewType) || '';
 
       const forwardBtn = document.createElement('button');
@@ -4780,6 +4799,7 @@ function render() {
         ? imageOrPlaceholder(stairsLink.image, '階段画像')
         : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[階段画像: ${stairsLink.image} 未用意]</div>`;
       debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${facingDebugLabel()}（階段）`;
+      updateCompassInfo();
       description.textContent = stairsLink.description;
 
       const stairsBtn = document.createElement('button');
@@ -4833,6 +4853,7 @@ function render() {
       viewArea.innerHTML = renderCorridorView(variant, imageFlipped);
       debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${facingDebugLabel()} viewType:${viewType} 使用画像:${variant.image}${imageFlipped ? '（反転表示）' : ''}`;
     }
+    updateCompassInfo();
 
     // 罠の結果メッセージ（1回限り）→ なければ動的フレーバー → なければ座標＋向き固有の
     // フレーバーテキスト → なければタイル固有のフレーバーテキスト → なければ空
