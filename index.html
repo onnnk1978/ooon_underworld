@@ -346,6 +346,30 @@ body{display:flex;flex-direction:column;align-items:center;
       max-width: none !important;
       margin-top: 0;
     }
+    /* 能力値表示（#hud）は、狭いモバイル画面向けの小さいフォントのままだと
+       広いサイドバー幅（320px）を持て余して読みにくいため、広い画面では
+       文字・セルを大きくする。6列だと1セルが狭すぎるため3列×4行に組み替える。 */
+    #hud {
+      padding: 14px 16px;
+    }
+    #hud .mh-top button {
+      font-size: 13px !important;
+      padding: 6px 12px !important;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    #hud .mh-name {
+      font-size: 19px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    #hud .mh-date { font-size: 14px; margin-bottom: 10px; }
+    #hud .mh-bars { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    #hud .mh-cell { padding: 8px 4px; }
+    #hud .mh-cell .lbl { font-size: 12px; margin-bottom: 4px; }
+    #hud .mh-cell .val { font-size: 18px; }
   }
 
 </style>
