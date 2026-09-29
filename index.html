@@ -5182,8 +5182,16 @@ function renderMinimap() {
 updateRaceInfo();
 updateAddsPreview();
 
-// キャラ作成中の時間を使ってダンジョン画像を先読みしておく
-preloadDungeonImages();
+// キャラ作成中の時間を使ってダンジョン画像を先読みしておく。ただしページ読み込み直後に
+// 即座に47枚を一斉フェッチすると、タイトル画面自身のアートワーク（initTitleArt()）の
+// 読み込みと帯域・同時接続数を奪い合い、かえってタイトル表示が遅くなってしまう。
+// windowのloadイベント（タイトル画像を含む初期表示に必要なリソースが揃った後）を
+// 待ってから先読みを開始することで、まず見える画面を素早く出す。
+if (document.readyState === 'complete') {
+  preloadDungeonImages();
+} else {
+  window.addEventListener('load', preloadDungeonImages);
+}
 
 </script>
 </body>
