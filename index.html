@@ -2662,7 +2662,12 @@ const DUNGEON_FLOORS = {
       "1,1,0": "wall_01.webp",
       "1,1,2": "wall_02.webp",
       "13,1,0": "wall_03.webp",
-      "13,1,2": "wall_04.webp"
+      "13,1,2": "wall_04.webp",
+      // 6,9は北・南・西の三方が開けたT字路（東only壁）。西を向くと前方・左（南）・
+      // 右（北）がすべて開いて見えるため、getViewType()ではcross_junction（十字路）
+      // と判定されてしまう（東が壁であることは前方視点からは分からないため）。
+      // 実際はT字路なので、t_junction系の画像・テキストに差し替える。
+      "6,9,3": "t_junction_02.webp"
     },
     tileFlavorByFacing: {
       "8,11,1": pickWallFacingFlavor,
@@ -2688,7 +2693,8 @@ const DUNGEON_FLOORS = {
       "1,1,0": pickWallFacingFlavor,
       "1,1,2": pickWallFacingFlavor,
       "13,1,0": pickWallFacingFlavor,
-      "13,1,2": pickWallFacingFlavor
+      "13,1,2": pickWallFacingFlavor,
+      "6,9,3": pickTJunctionFlavor
     }
   }
 };
