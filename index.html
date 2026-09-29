@@ -3699,22 +3699,39 @@ function handOverCorpseToLeader(){
   render();
 }
 
-// 水汲みの依頼（フロア3の井戸を利用する体裁の、その場で完結する仕事）。
-// 5回こなすごとに一旦打ち止めになり、翌日5:00まで再受託できない。
+// 水汲みの依頼（フロア3の井戸(5,10)まで実際に行って汲んでくる必要がある）。
+// 受ける→井戸で汲む→リーダーに報告する、の3ステップで1回。5回こなすごとに
+// 一旦打ち止めになり、翌日5:00まで再受託できない。
 function isWaterQuestOnCooldown(){
   return !!player._waterQuestCooldownUntil && GAME_TIME.totalMinutes < player._waterQuestCooldownUntil;
 }
-function doWaterQuest(){
-  if (isWaterQuestOnCooldown()) return;
+function acceptWaterQuest(){
+  if (isWaterQuestOnCooldown() || player._waterQuestActive) return;
+  player._waterQuestActive = true;
+  player._waterQuestFetched = false;
+  _leaderMessage = 'ドワーフ「フロア3にある井戸まで行って、水を汲んできてくれ。」';
+  render();
+}
+// 井戸(フロア3, 5,10)で「水を汲む」を選んだときに呼ばれる（render()の通路分岐参照）。
+function fetchWellWater(){
+  if (!player._waterQuestActive || player._waterQuestFetched) return;
+  player._waterQuestFetched = true;
+  _dungeonMessage = '井戸から水を汲んだ。居住区のリーダーのもとへ戻ろう。';
+  render();
+}
+function completeWaterQuest(){
+  if (!player._waterQuestFetched) return;
   gainAP(2);
   changeSettlementTrust(0.2);
+  player._waterQuestActive = false;
+  player._waterQuestFetched = false;
   player._waterQuestBatchCount = (player._waterQuestBatchCount || 0) + 1;
   if (player._waterQuestBatchCount >= 5) {
     player._waterQuestBatchCount = 0;
     player._waterQuestCooldownUntil = (currentAbsDay() + 1) * 24 * 60 + 5 * 60;
-    _leaderMessage = '井戸から水を汲んで居住区に届けた。ドワーフ「今日はよく働いたな。もう十分だ、また明日にしてくれ。」';
+    _leaderMessage = '井戸の水を届けた。ドワーフ「今日はよく働いたな。もう十分だ、また明日にしてくれ。」';
   } else {
-    _leaderMessage = '井戸から水を汲んで居住区に届けた。ドワーフ「助かるよ。」';
+    _leaderMessage = '井戸の水を届けた。ドワーフ「助かるよ。」';
   }
   render();
 }
@@ -3805,12 +3822,18 @@ function renderLeaderQuests(){
   _leaderMessage = null;
 
   const waterBtn = document.createElement('button');
-  if (isWaterQuestOnCooldown()) {
+  if (player._waterQuestFetched) {
+    waterBtn.textContent = '井戸の水を届けて報告する（経験値+2、居住区信頼度+0.2）';
+    waterBtn.onclick = () => completeWaterQuest();
+  } else if (player._waterQuestActive) {
+    waterBtn.textContent = '（フロア3の井戸まで水を汲みに行ってきてくれ）';
+    waterBtn.disabled = true;
+  } else if (isWaterQuestOnCooldown()) {
     waterBtn.textContent = '（今日の水汲みはもう十分だと言われた。また明日来てくれ）';
     waterBtn.disabled = true;
   } else {
-    waterBtn.textContent = '水汲みの仕事をこなす（経験値+2、居住区信頼度+0.2）';
-    waterBtn.onclick = () => doWaterQuest();
+    waterBtn.textContent = '水汲みの仕事を受ける';
+    waterBtn.onclick = () => acceptWaterQuest();
   }
   choices.appendChild(waterBtn);
 
@@ -4608,6 +4631,16 @@ function render() {
       interactBtn.textContent = interact.label;
       interactBtn.onclick = () => handleAction(interact.action);
       choices.appendChild(interactBtn);
+    }
+
+    // 水汲みの依頼中、フロア3の井戸(5,10・南向き)でだけ「水を汲む」を選べる
+    // （居住区リーダーの依頼。acceptWaterQuest()/fetchWellWater()参照）。
+    if (!isDark && dungeonData.floor === 3 && posKey === '5,10' && player.facing === 2
+        && player._waterQuestActive && !player._waterQuestFetched) {
+      const fetchBtn = document.createElement('button');
+      fetchBtn.textContent = '井戸から水を汲む';
+      fetchBtn.onclick = () => fetchWellWater();
+      choices.appendChild(fetchBtn);
     }
 
     // 方向操作はテキストボタンではなく、画面下端に固定表示するアイコンパッド（#nav-controls）に表示する。
