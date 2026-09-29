@@ -3720,7 +3720,7 @@ function acceptWaterQuest(){
   if (isWaterQuestOnCooldown() || player._waterQuestActive) return;
   player._waterQuestActive = true;
   player._waterQuestFetched = false;
-  _leaderMessage = 'ドワーフ「フロア3にある井戸まで行って、水を汲んできてくれ。」';
+  _leaderMessage = 'ドワーフ「このフロアにある井戸まで行って、水を汲んできてくれ。」';
   render();
 }
 // 井戸(フロア3, 5,10)で「水を汲む」を選んだときに呼ばれる（render()の通路分岐参照）。
@@ -3837,7 +3837,7 @@ function renderLeaderQuests(){
     waterBtn.textContent = '井戸の水を届けて報告する（経験値+2、居住区信頼度+0.2）';
     waterBtn.onclick = () => completeWaterQuest();
   } else if (player._waterQuestActive) {
-    waterBtn.textContent = '（フロア3の井戸まで水を汲みに行ってきてくれ）';
+    waterBtn.textContent = '（このフロアの井戸まで水を汲みに行ってきてくれ）';
     waterBtn.disabled = true;
   } else if (isWaterQuestOnCooldown()) {
     waterBtn.textContent = '（今日の水汲みはもう十分だと言われた。また明日来てくれ）';
@@ -3860,7 +3860,7 @@ function renderLeaderQuests(){
   } else {
     nestBtn.textContent = '近くの巨大ネズミの巣について聞く';
     nestBtn.onclick = () => {
-      _leaderMessage = 'ドワーフ「フロア3の壁に空いた穴の先に、巨大ネズミの巣があるらしい。見つけたら片付けてきてくれ。」';
+      _leaderMessage = 'ドワーフ「このフロアの壁に空いた穴の先に、巨大ネズミの巣があるらしい。見つけたら片付けてきてくれ。」';
       render();
     };
   }
