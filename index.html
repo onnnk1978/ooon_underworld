@@ -230,8 +230,10 @@ body{display:flex;flex-direction:column;align-items:center;
      display:flex;flex-direction:columnは、幅いっぱいの子要素を縦に並べる普通の
      ブロック積み（従来のdisplay:block）と見た目上は同じだが、各子要素にorderを
      明示することで、#left-pane/#right-paneというラッパー越しでも元のDOM順と
-     同じ表示順を保証できるようにしている（下記#hud〜#minimap-rowのorder参照）。 */
-  #dungeon-screen { display: flex; flex-direction: column; padding-bottom: 100px; }
+     同じ表示順を保証できるようにしている（下記#hud〜#minimap-rowのorder参照）。
+     #nav-controlsが移動ボタン3つ・その他ボタン3つの2段（計6項目）になった分、
+     予約する余白も広げてある。 */
+  #dungeon-screen { display: flex; flex-direction: column; padding-bottom: 180px; }
   #left-pane, #right-pane { display: contents; }
   #hud { order: 1; }
   #viewArea { order: 2; }
@@ -242,7 +244,9 @@ body{display:flex;flex-direction:column;align-items:center;
   #choices { order: 7; }
   #minimap-row { order: 8; }
 
-  /* ── 通路移動の方向操作（画面下端に固定表示） ── */
+  /* ── 通路移動の方向操作＋セーブ等（画面下端に固定表示）。
+     上段＝その他のボタン（眠る・調べる・セーブ）、下段＝移動ボタン（左・前進・右）の
+     3列×2段・計6項目のグリッド（renderの方向操作ボタン追加処理を参照）。 ── */
   #nav-controls {
     position: fixed;
     left: 50%;
@@ -250,7 +254,9 @@ body{display:flex;flex-direction:column;align-items:center;
     transform: translateX(-50%);
     width: 480px;
     max-width: 94vw;
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, 70px);
+    grid-auto-rows: 70px;
     justify-content: center;
     gap: 10px;
     z-index: 200;
@@ -258,7 +264,6 @@ body{display:flex;flex-direction:column;align-items:center;
   #nav-controls:empty { display: none; }
   #nav-controls button {
     padding: 0; margin: 0; font-size: 36px; line-height: 1;
-    width: 70px; height: 70px;
     display: flex; align-items: center; justify-content: center;
     background: var(--panel); border: 1px solid var(--border); color: var(--dim);
   }
@@ -535,7 +540,6 @@ body{display:flex;flex-direction:column;align-items:center;
   <div class="mh-top">
     <div class="mh-name" id="mh-name">-</div>
     <div style="display:flex;gap:4px">
-      <button onclick="saveGame()" title="セーブ" style="background:#150f06;border:1px solid var(--border);color:var(--white2);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:3px 8px;cursor:pointer;border-radius:2px">&#128190;</button>
       <button onclick="openStatusPanel()" title="ステータス" style="background:#150f06;border:1px solid var(--border);color:var(--white2);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 3px);padding:3px 8px;cursor:pointer;border-radius:2px"> ステータス</button>
     </div>
   </div>
@@ -2871,6 +2875,7 @@ const NAV_ICON_PATHS = {
   right:   '<path d="M5 12h14M12 5l7 7-7 7"/>',
   examine: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>',
   sleep:   '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+  save:    '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
 };
 function navIcon(name){
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${NAV_ICON_PATHS[name]}</svg>`;
@@ -4823,8 +4828,16 @@ function render() {
     sleepBtn.innerHTML = navIcon('sleep');
     sleepBtn.onclick = () => openSleepMenu('outside');
 
-    // 表示順：睡眠・左・前進・右・調べる
-    [sleepBtn, turnLeftBtn, forwardBtn, turnRightBtn, examineBtn].forEach(btn => navControls.appendChild(btn));
+    // セーブ（元は#hudの名前欄横にあったボタンを、移動パッドに統合した）。
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'nav-save';
+    saveBtn.title = 'セーブ';
+    saveBtn.innerHTML = navIcon('save');
+    saveBtn.onclick = () => saveGame();
+
+    // 3列×2段（計6項目）のグリッドで、上段＝その他のボタン（睡眠・調べる・セーブ）、
+    // 下段＝移動ボタン（左・前進・右）の表示順にする（#nav-controlsのCSS参照）。
+    [sleepBtn, examineBtn, saveBtn, turnLeftBtn, forwardBtn, turnRightBtn].forEach(btn => navControls.appendChild(btn));
   }
 
   renderMinimap();
