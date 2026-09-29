@@ -176,7 +176,7 @@ body{display:flex;flex-direction:column;align-items:center;
   body { background:#111; color:#eee; font-family: sans-serif; display:flex; flex-direction:column; align-items:center; padding:20px; }
   h2 { margin-bottom: 4px; }
   .note { color:#888; font-size:12px; margin-bottom:16px; }
-  #viewArea { width:480px; height:320px; background:#000; border:2px solid #555; position:relative; overflow:hidden; }
+  #viewArea { width:480px; max-width:94vw; height:320px; background:#000; border:2px solid #555; position:relative; overflow:hidden; }
   #debugInfo { width:480px; font-size:12px; color:#999; margin-top:6px; white-space:pre-line; }
   /* 本番公開先（Cloudflare Pagesの本番ホスト名）でのみ付与される。開発用の座標・向き・
      viewType等の表示とミニマップを本番からは隠す（付与ロジックはスクリプト冒頭を参照）。 */
@@ -226,8 +226,21 @@ body{display:flex;flex-direction:column;align-items:center;
   .player { background:#c33; color:#fff; font-weight:bold; }
 
   /* 画面下端に固定表示する#nav-controlsの下に、その分の余白を確保しておく
-     （確保しないと、ミニマップなど下部のコンテンツに操作パッドが重なってしまう）。 */
-  #dungeon-screen { padding-bottom: 100px; }
+     （確保しないと、ミニマップなど下部のコンテンツに操作パッドが重なってしまう）。
+     display:flex;flex-direction:columnは、幅いっぱいの子要素を縦に並べる普通の
+     ブロック積み（従来のdisplay:block）と見た目上は同じだが、各子要素にorderを
+     明示することで、#left-pane/#right-paneというラッパー越しでも元のDOM順と
+     同じ表示順を保証できるようにしている（下記#hud〜#minimap-rowのorder参照）。 */
+  #dungeon-screen { display: flex; flex-direction: column; padding-bottom: 100px; }
+  #left-pane, #right-pane { display: contents; }
+  #hud { order: 1; }
+  #viewArea { order: 2; }
+  #debugInfo { order: 3; }
+  #description { order: 4; }
+  #shop-list { order: 5; }
+  #combatArea { order: 6; }
+  #choices { order: 7; }
+  #minimap-row { order: 8; }
 
   /* ── 通路移動の方向操作（画面下端に固定表示） ── */
   #nav-controls {
@@ -277,6 +290,103 @@ body{display:flex;flex-direction:column;align-items:center;
   #hud .mh-cell.danger .val,
   #hud .mh-cell.critical .val { color:var(--red); }
   #hud .mh-cell.critical { border-color:var(--red); }
+
+  /* ══════════════════════════════════════════
+     横長PC画面向けレイアウト（OOON本家 tt5_engine.html の
+     「@media (min-width: 860px) 左ペイン固定幅＋右ペインflex」構成を移植）。
+     #left-pane/#right-paneは、狭い画面ではdisplay:contentsで箱を作らない
+     透明なラッパーなので、モバイルでの見た目・レイアウトには一切影響しない
+     （子要素は#dungeon-screenの直接のflexアイテムとして扱われ、上で明示した
+     orderの通りに並ぶ）。広い画面でのみ左右2つの実体を持つflexboxになり、
+     能力値・ミニマップ・方向操作パッドをまとめた右サイドバーと、
+     画像・本文・選択肢のメイン列に分かれる。 ══════════════════════════════════════════ */
+  @media (min-width: 860px) {
+    #dungeon-screen {
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 20px;
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding-bottom: 24px;
+    }
+    /* 左ペイン（能力値・ミニマップ・方向操作パッド）と右ペイン（画像・本文・選択肢）は、
+       画面上は右／左を入れ替えて表示する。HTML上のグルーピングはそのままに、
+       flexのorderだけで見た目の左右を反転させている。 */
+    #left-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 320px;
+      min-width: 320px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 20px;
+      order: 2;
+    }
+    #right-pane {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+      order: 1;
+    }
+    #hud, #minimap-row, #viewArea, #debugInfo, #description,
+    #shop-list, #combatArea, #choices {
+      width: 100% !important;
+      max-width: none !important;
+    }
+    /* サイドバー列内では、ミニマップ・方向操作パッド・能力値テストを縦に並べる
+       （モバイルでは横並びだが、320px幅の列では縦積みの方が見やすい） */
+    #minimap-row {
+      flex-direction: column !important;
+      align-items: stretch !important;
+    }
+    /* シーン画像（#viewArea）は、広い画面では領域の横幅いっぱいまで拡大する。
+       縦横比（480:320=3:2）は保ったまま高さが伸びる（imageOrPlaceholder()側で
+       画像・SVG・未用意プレースホルダーをすべてwidth:100%;height:100%にしてあるため、
+       ここで#viewArea自体のサイズを広げるだけで中身も追従する） */
+    #viewArea {
+      height: auto !important;
+      aspect-ratio: 3 / 2;
+    }
+    /* 方向操作パッドは、モバイルでは画面下端に固定表示するが、
+       広い画面ではサイドバー列内に静的配置する
+       （固定表示のままだと画面中央に浮いてしまうため解除する） */
+    #nav-controls {
+      position: static !important;
+      left: auto !important;
+      bottom: auto !important;
+      transform: none !important;
+      width: 100% !important;
+      max-width: none !important;
+      margin-top: 0;
+    }
+    /* 能力値表示（#hud）は、狭いモバイル画面向けの小さいフォントのままだと
+       広いサイドバー幅（320px）を持て余して読みにくいため、広い画面では
+       文字・セルを大きくする。6列だと1セルが狭すぎるため3列×4行に組み替える。 */
+    #hud {
+      padding: 14px 16px;
+    }
+    #hud .mh-top button {
+      font-size: 13px !important;
+      padding: 6px 12px !important;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    #hud .mh-name {
+      font-size: 19px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    #hud .mh-date { font-size: 14px; margin-bottom: 10px; }
+    #hud .mh-bars { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    #hud .mh-cell { padding: 8px 4px; }
+    #hud .mh-cell .lbl { font-size: 12px; margin-bottom: 4px; }
+    #hud .mh-cell .val { font-size: 18px; }
+  }
 
 </style>
 </head>
@@ -415,6 +525,12 @@ body{display:flex;flex-direction:column;align-items:center;
 </div>
 
 <div id="dungeon-screen" class="hidden">
+<!-- #left-pane/#right-paneは、狭い画面ではdisplay:contentsで箱を作らない透明なラッパーで、
+     モバイルでの見た目・DOM順への影響は一切ない（各要素のorderで元の並び順を明示的に
+     再現しているため、グルーピングのためにHTML上どちらに置くかは見た目に関係しない）。
+     広い画面（@media min-width:860px）でのみ実体を持つflexboxになり、左ペイン（能力値・
+     ミニマップ・方向操作パッド）と右ペイン（画像・本文・選択肢）の2カラムを作る。 -->
+<div id="left-pane">
 <div id="hud">
   <div class="mh-top">
     <div class="mh-name" id="mh-name">-</div>
@@ -427,6 +543,28 @@ body{display:flex;flex-direction:column;align-items:center;
   <div class="mh-bars" id="mh-bars"></div>
 </div>
 
+<div id="minimap-row" style="display:flex; align-items:flex-start; gap:12px; width:480px; max-width:94vw;">
+<div id="minimap"></div>
+
+<!-- 通路移動中の方向操作（前進／左右を向く／周囲を調べる）をアイコンボタンで表示する。
+     能力値テスト中はstartDiceTest()側でクリアされ、部屋・戦闘中はrender()冒頭でクリアされる。
+     モバイルでは画面下端に固定表示、横長PC画面ではサイドバー内に静的配置する
+     （#nav-controlsのCSS、@media (min-width: 860px)ブロック参照）。 -->
+<div id="nav-controls"></div>
+
+<!-- ダンジョン探索中の能力値テスト（落とし穴など）は画面遷移せず、ミニマップの右側にインライン表示する -->
+<div id="dice-test-inline" class="hidden" style="flex:1; min-width:0;">
+ <div class="dice-area" style="padding:12px">
+  <h3 style="font-size:calc(var(--font-sm) + 1px)"> 能力値テスト</h3>
+  <div id="dd-inline" style="font-size:var(--font-base)"></div>
+  <div class="dr-result" id="dres-inline" style="font-size:var(--font-base);min-height:28px">──  ──</div>
+  <button class="roll-btn" id="rl-btn-inline" onclick="doRoll()" style="padding:10px;min-height:auto">▶ ROLL THE DICE!</button>
+ </div>
+</div>
+</div>
+</div>
+
+<div id="right-pane">
 <div id="viewArea"></div>
 <div id="debugInfo"></div>
 <div id="description"></div>
@@ -441,23 +579,6 @@ body{display:flex;flex-direction:column;align-items:center;
 <div id="combatArea" class="hidden"></div>
 
 <div id="choices"></div>
-
-<div id="minimap-row" style="display:flex; align-items:flex-start; gap:12px; width:480px; max-width:94vw;">
-<div id="minimap"></div>
-
-<!-- 通路移動中の方向操作（前進／左右を向く／周囲を調べる）をアイコンボタンで表示する。
-     能力値テスト中はstartDiceTest()側でクリアされ、部屋・戦闘中はrender()冒頭でクリアされる。 -->
-<div id="nav-controls"></div>
-
-<!-- ダンジョン探索中の能力値テスト（落とし穴など）は画面遷移せず、ミニマップの右側にインライン表示する -->
-<div id="dice-test-inline" class="hidden" style="flex:1; min-width:0;">
- <div class="dice-area" style="padding:12px">
-  <h3 style="font-size:calc(var(--font-sm) + 1px)"> 能力値テスト</h3>
-  <div id="dd-inline" style="font-size:var(--font-base)"></div>
-  <div class="dr-result" id="dres-inline" style="font-size:var(--font-base);min-height:28px">──  ──</div>
-  <button class="roll-btn" id="rl-btn-inline" onclick="doRoll()" style="padding:10px;min-height:auto">▶ ROLL THE DICE!</button>
- </div>
-</div>
 </div>
 </div>
 
@@ -2707,9 +2828,9 @@ function preloadDungeonImages() {
 // 画像があれば<img>、なければプレースホルダーdivを表示するHTMLを組み立てる共通ヘルパー。
 // 実際に読み込みに失敗した場合（ファイル欠落など）もonerrorでプレースホルダーに切り替わる。
 function imageOrPlaceholder(filename, label, extraStyle) {
-  const style = `width:480px;height:320px;object-fit:cover;display:block;${extraStyle || ''}`;
+  const style = `width:100%;height:100%;object-fit:cover;display:block;${extraStyle || ''}`;
   const placeholder = `[${label}: ${filename} 未検出]`;
-  return `<img src="${imageUrl(filename)}" alt="${filename}" style="${style}" onerror="this.outerHTML='<div style=&quot;width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;&quot;>${placeholder}</div>'" />`;
+  return `<img src="${imageUrl(filename)}" alt="${filename}" style="${style}" onerror="this.outerHTML='<div style=&quot;width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;&quot;>${placeholder}</div>'" />`;
 }
 
 // ============================================================
@@ -2885,7 +3006,7 @@ function renderCorridorView(variant, flipped) {
   // バリエーションごとに色相を変えて「別カット」を演出（未用意パターンの仮表示）
   const hue = (variant.index * 47) % 360;
 
-  let svg = `<svg viewBox="0 0 480 320" width="480" height="320" style="${flipStyle}">`;
+  let svg = `<svg viewBox="0 0 480 320" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" style="${flipStyle}">`;
   svg += `<rect width="480" height="320" fill="hsl(${hue},20%,10%)" />`;
   svg += `<polygon points="140,80 340,80 300,160 180,160" fill="hsl(${hue},25%,25%)" stroke="#000" />`;
   svg += lOpen
@@ -3593,7 +3714,7 @@ function renderShop(){
 
   viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('shop_stall.webp')
     ? imageOrPlaceholder('shop_stall.webp', '露店')
-    : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[露店]</div>`;
+    : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[露店]</div>`;
   debugInfo.textContent = `所持金: ${formatMoney()}`;
   description.textContent = _shopMessage || '雑多な品を並べた露店だ。欲しいものはあるか。不要な武器は売ることもできる。';
   _shopMessage = null;
@@ -3784,7 +3905,7 @@ function renderLeaderMain(){
 
   viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('room_exile_leader.webp')
     ? imageOrPlaceholder('room_exile_leader.webp', '居住区リーダー')
-    : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_leader.webp 未用意]</div>`;
+    : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_leader.webp 未用意]</div>`;
   debugInfo.textContent = `居住区信頼度: ${(player.settlementTrust || 0).toFixed(1)}`;
   description.textContent = _leaderMessage || 'ドワーフは天幕の前でパイプをふかしている。「何か用か？」';
   _leaderMessage = null;
@@ -3827,7 +3948,7 @@ function renderLeaderQuests(){
 
   viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('room_exile_leader.webp')
     ? imageOrPlaceholder('room_exile_leader.webp', '居住区リーダー')
-    : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_leader.webp 未用意]</div>`;
+    : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_leader.webp 未用意]</div>`;
   debugInfo.textContent = `居住区信頼度: ${(player.settlementTrust || 0).toFixed(1)}`;
   description.textContent = _leaderMessage || 'ドワーフ「どんな仕事を手伝ってくれるってんだ？」';
   _leaderMessage = null;
@@ -3976,7 +4097,7 @@ function renderCompanionDialog(){
 
   viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('room_exile_settlement.webp')
     ? imageOrPlaceholder('room_exile_settlement.webp', '居住区')
-    : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_settlement.webp 未用意]</div>`;
+    : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_settlement.webp 未用意]</div>`;
   debugInfo.textContent = '';
 
   if (player.companion) {
@@ -4052,7 +4173,7 @@ function renderSleepMenu(){
   if (sleepImage) {
     viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(sleepImage)
       ? imageOrPlaceholder(sleepImage, '寝床')
-      : `<div style="width:480px;height:320px;background:#223;display:flex;align-items:center;justify-content:center;color:#aaa;">[睡眠]</div>`;
+      : `<div style="width:100%;height:100%;background:#223;display:flex;align-items:center;justify-content:center;color:#aaa;">[睡眠]</div>`;
     debugInfo.textContent = '';
   }
   description.textContent = sleepState.mode === 'outside'
@@ -4386,7 +4507,7 @@ function render() {
 
   // 罠などによるダンジョン内ゲームオーバー（戦闘死亡とは別経路）
   if (_dungeonGameOverMessage) {
-    viewArea.innerHTML = `<div style="width:480px;height:320px;background:#500;display:flex;align-items:center;justify-content:center;color:#fdd;">── ゲームオーバー ──</div>`;
+    viewArea.innerHTML = `<div style="width:100%;height:100%;background:#500;display:flex;align-items:center;justify-content:center;color:#fdd;">── ゲームオーバー ──</div>`;
     debugInfo.textContent = '';
     description.textContent = _dungeonGameOverMessage;
     const restartBtn = document.createElement('button');
@@ -4439,7 +4560,7 @@ function render() {
       if (room._resolved) {
         viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(room.settlementImage)
           ? imageOrPlaceholder(room.settlementImage, '部屋画像')
-          : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.settlementImage} 未用意]</div>`;
+          : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.settlementImage} 未用意]</div>`;
         debugInfo.textContent = `部屋: ${currentRoomId}（解決済み）`;
         if (_dungeonMessage) {
           description.textContent = _dungeonMessage;
@@ -4458,7 +4579,7 @@ function render() {
         const step = room.steps[room._step || 0];
         viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(room.image)
           ? imageOrPlaceholder(room.image, '部屋画像')
-          : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.image} 未用意]</div>`;
+          : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.image} 未用意]</div>`;
         debugInfo.textContent = `部屋: ${currentRoomId} / ステップ${room._step || 0}`;
         description.textContent = step.text;
         (step.choices || []).forEach(choice => {
@@ -4472,7 +4593,7 @@ function render() {
     } else {
       viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(room.image)
         ? imageOrPlaceholder(room.image, '部屋画像')
-        : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.image} 未用意]</div>`;
+        : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.image} 未用意]</div>`;
       debugInfo.textContent = `部屋: ${currentRoomId} / eventType: ${room.eventType}${room._resolved ? "（解決済み）" : ""}`;
       description.textContent = room.description;
 
@@ -4531,7 +4652,7 @@ function render() {
     } else {
       viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(stairsLink.image)
         ? imageOrPlaceholder(stairsLink.image, '階段画像')
-        : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[階段画像: ${stairsLink.image} 未用意]</div>`;
+        : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[階段画像: ${stairsLink.image} 未用意]</div>`;
       debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label}（階段）`;
       description.textContent = stairsLink.description;
 
@@ -4580,7 +4701,7 @@ function render() {
     }
 
     if (isDark) {
-      viewArea.innerHTML = `<div style="width:480px;height:320px;background:#000;display:flex;align-items:center;justify-content:center;color:#555;">[暗闇で何も見えない]</div>`;
+      viewArea.innerHTML = `<div style="width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;color:#555;">[暗闇で何も見えない]</div>`;
       debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label}（暗闇・viewType:${viewType}）`;
     } else {
       viewArea.innerHTML = renderCorridorView(variant, imageFlipped);
