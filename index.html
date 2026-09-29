@@ -3712,12 +3712,26 @@ const SHOP_ITEMS = [
   { id: 'clothArmor', name: '誰かが着ていた布の鎧', cost: 40, unitLabel: '',
     statLine: '防護2　必要:強さ2　重量100',
     getCount(){ return countOwnedByName('誰かが着ていた布の鎧'); },
-    buy(){ player.inventory.push({ type: 'armor', name: '誰かが着ていた布の鎧', hits: 2, stReq: 2, cost: 40, weight: 100 }); } }
+    buy(){ player.inventory.push({ type: 'armor', name: '誰かが着ていた布の鎧', hits: 2, stReq: 2, cost: 40, weight: 100 }); } },
+  { id: 'compass', name: 'コンパス', cost: 12, unitLabel: '',
+    statLine: '所持していると自分の向いている方角（東西南北）がわかる　重量5',
+    getCount(){ return countOwnedByName('コンパス'); },
+    buy(){ player.inventory.push({ type: 'misc', name: 'コンパス', weight: 5, desc: '磁針が北を指す携帯用の道具。持っていれば自分が今どちらを向いているかわかる。' }); } }
 ];
 
 // 野宿（居住地外での睡眠）時、寝具を持っているかどうかで回復量が変わる。
 function hasBedding(){
   return (player.inventory || []).some(i => i.name === '寝具');
+}
+// コンパスを持っているかどうか（デバッグ情報欄の向き表示に使う。売却・紛失などで
+// 手放していれば向きがわからなくなる）。
+function hasCompass(){
+  return (player.inventory || []).some(i => i.name === 'コンパス');
+}
+// デバッグ情報欄（座標:(x,y) 向き:...）に出す向きの表示。コンパスを持っていれば
+// 東西南北がそのままわかるが、持っていなければ「不明」になる。
+function facingDebugLabel(){
+  return hasCompass() ? DIRS[player.facing].label : '不明';
 }
 
 function openShop(){
@@ -4738,7 +4752,7 @@ function render() {
       const viewType = getViewType(player.x, player.y, player.facing);
       const variant = pickVariant(dungeonData.floor, player.x, player.y, player.facing, viewType);
       viewArea.innerHTML = renderCorridorView(variant, false);
-      debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label} viewType:${viewType} 使用画像:${variant.image}`;
+      debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${facingDebugLabel()} viewType:${viewType} 使用画像:${variant.image}`;
       description.textContent = dungeonData.tileFlavor[posKey] || pickGenericFlavor(viewType) || '';
 
       const forwardBtn = document.createElement('button');
@@ -4753,7 +4767,7 @@ function render() {
       viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(stairsLink.image)
         ? imageOrPlaceholder(stairsLink.image, '階段画像')
         : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[階段画像: ${stairsLink.image} 未用意]</div>`;
-      debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label}（階段）`;
+      debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${facingDebugLabel()}（階段）`;
       description.textContent = stairsLink.description;
 
       const stairsBtn = document.createElement('button');
@@ -4802,10 +4816,10 @@ function render() {
 
     if (isDark) {
       viewArea.innerHTML = `<div style="width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;color:#555;">[暗闇で何も見えない]</div>`;
-      debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label}（暗闇・viewType:${viewType}）`;
+      debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${facingDebugLabel()}（暗闇・viewType:${viewType}）`;
     } else {
       viewArea.innerHTML = renderCorridorView(variant, imageFlipped);
-      debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label} viewType:${viewType} 使用画像:${variant.image}${imageFlipped ? '（反転表示）' : ''}`;
+      debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${facingDebugLabel()} viewType:${viewType} 使用画像:${variant.image}${imageFlipped ? '（反転表示）' : ''}`;
     }
 
     // 罠の結果メッセージ（1回限り）→ なければ動的フレーバー → なければ座標＋向き固有の
