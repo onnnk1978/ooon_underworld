@@ -4803,6 +4803,7 @@ function startCombat(combatId, { onWin, onFlee, count } = {}) {
     playerDead: false,
     uiMode: 'action', // 'action' | 'spellSelect' | 'ttyfLevel'
     vorpalActive: false, // 鋭き刃の効果待ち（次の「戦う」で武器ダイス2倍）
+    companionAction: 'attack', // 'attack' | 'defend'（同行者がいる間、戦う前に選べる。resolveCombatRound()参照）
   };
   render();
 }
@@ -4829,16 +4830,23 @@ function resolveCombatRound(pcAction){
     logHeader = `― プレイヤー(${pRoll.weaponName}${vorpal ? '・鋭き刃でダイス2倍' : ''}): ${pRoll.diceCount}D6=${pRoll.diceTotal}+加算${pAddsTotal >= 0 ? '+' : ''}${pAddsTotal} = ${pRoll.total}`;
   }
 
-  // 同行者がいて生存していれば、そのロールをパーティ合計に加算する（OOON本家の
-  // NPCパーティ攻撃合算に相当）。同行者は魔法・遠距離攻撃を持たないため、常に
-  // playerCombatRoll()と同じ近接ロールで参戦する。
+  // 同行者がいて生存していれば、cs.companionActionで選んだ行動を実行する（OOON本家の
+  // NPCパーティ攻撃合算に相当）。同行者は魔法・遠距離攻撃を持たないため、攻撃する場合は
+  // playerCombatRoll()と同じ近接ロールで参戦する。「様子を見る」を選んでいる間は攻撃
+  // ロールに参加しない代わりに、被弾時の防具点が2倍になる（プレイヤー自身のdefending
+  // 判定と同じ扱い）。
   const companion = player.companion;
   const companionAlive = companion && companion.con > 0;
+  const companionDefending = companionAlive && cs.companionAction === 'defend';
   let cRoll = null;
   if (companionAlive) {
-    cRoll = playerCombatRoll(companion);
-    const cAddsTotal = cRoll.weaponAdds + cRoll.statAdds;
-    logHeader += `／${companion.name}(${cRoll.weaponName}): ${cRoll.diceCount}D6=${cRoll.diceTotal}+加算${cAddsTotal >= 0 ? '+' : ''}${cAddsTotal} = ${cRoll.total}`;
+    if (companionDefending) {
+      logHeader += `／${companion.name}: 様子を見ている`;
+    } else {
+      cRoll = playerCombatRoll(companion);
+      const cAddsTotal = cRoll.weaponAdds + cRoll.statAdds;
+      logHeader += `／${companion.name}(${cRoll.weaponName}): ${cRoll.diceCount}D6=${cRoll.diceTotal}+加算${cAddsTotal >= 0 ? '+' : ''}${cAddsTotal} = ${cRoll.total}`;
+    }
   }
   const partyTotal = pRoll.total + (cRoll ? cRoll.total : 0);
 
@@ -4871,7 +4879,7 @@ function resolveCombatRound(pcAction){
       // resolveRound()の味方ダメージ分担ロジックに相当）。
       const targets = [
         { pc: player, armor: getArmorValue(player) * (pcAction && pcAction.defending ? 2 : 1), label: 'あなた' },
-        { pc: companion, armor: getArmorValue(companion), label: companion.name },
+        { pc: companion, armor: getArmorValue(companion) * (companionDefending ? 2 : 1), label: companion.name },
       ];
       const perTarget = Math.floor(rawDmg / targets.length);
       const remainder = rawDmg % targets.length;
@@ -4993,6 +5001,15 @@ function renderCombat() {
 
   const cs = combatState;
   const playerPct = Math.max(0, player.con / player.maxCon * 100);
+  const companion = player.companion;
+  const companionRow = companion ? (() => {
+    const dead = companion.con <= 0;
+    const pct = companion.maxCon > 0 ? Math.max(0, companion.con / companion.maxCon * 100) : 0;
+    return `
+      <div class="hp-lbl" style="${dead ? 'color:#555' : ''}">${companion.name}: 体力 ${Math.max(companion.con,0)}/${companion.maxCon}${dead ? '（戦闘不能）' : ''}</div>
+      <div class="hp-bar-wrap"><div class="hp-bar-fill player" style="width:${pct}%"></div></div>
+    `;
+  })() : '';
   const enemyRows = cs.enemies.map(e => {
     const dead = e.curMR <= 0;
     const pct = e.mr > 0 ? Math.max(0, e.curMR / e.mr * 100) : 0;
@@ -5009,6 +5026,7 @@ function renderCombat() {
         <div style="font-size:calc(var(--font-sm) - 2px);color:var(--white);margin-bottom:4px">味方</div>
         <div class="hp-lbl">YOU: 体力 ${Math.max(player.con,0)}/${player.maxCon}</div>
         <div class="hp-bar-wrap"><div class="hp-bar-fill player" style="width:${playerPct}%"></div></div>
+        ${companionRow}
       </div>
       <div id="cbt-enemy">
         <div style="font-size:calc(var(--font-sm) - 2px);color:var(--white);margin-bottom:4px">敵</div>
@@ -5149,6 +5167,21 @@ function renderCombat() {
     backBtn.onclick = () => { cs.uiMode = 'ttyfLevel'; render(); };
     choices.appendChild(backBtn);
     return;
+  }
+
+  // 同行者がいる間は、次に「戦う」を選んだときの同行者の行動をあらかじめ選べる
+  // （攻撃する＝通常通り攻撃ロールに参加／様子を見る＝攻撃せず、被弾時の防具点が
+  // 2倍になる。選択は変更するまで維持される）。
+  if (companion && companion.con > 0) {
+    const isDefending = cs.companionAction === 'defend';
+    const companionActionBtn = document.createElement('button');
+    companionActionBtn.className = 'choice-btn';
+    companionActionBtn.textContent = `同行者(${companion.name})の行動: ${isDefending ? '様子を見る' : '攻撃する'}（タップで切り替え）`;
+    companionActionBtn.onclick = () => {
+      cs.companionAction = isDefending ? 'attack' : 'defend';
+      render();
+    };
+    choices.appendChild(companionActionBtn);
   }
 
   const fightBtn = document.createElement('button');
