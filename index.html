@@ -2567,7 +2567,10 @@ const DUNGEON_FLOORS = {
       // 東西を向くと南への開口によりcorner_left/corner_rightになってしまうため、
       // 他の行き止まり通路と同様に壁アップ画像＋壁のテキストに差し替える。
       "10,1,1": "wall_02.webp",
-      "10,1,3": "wall_03.webp"
+      "10,1,3": "wall_03.webp",
+      // 行き止まり（北向き）の足元には、平坦な壁ではなく床に大きな穴が
+      // 開いている専用の絵にする。
+      "10,1,0": "room_pit.webp"
     },
     tileFlavorByFacing: {
       "10,15,1": pickWallFacingFlavor,
@@ -2580,7 +2583,8 @@ const DUNGEON_FLOORS = {
       "6,14,0": pickWallFacingFlavor,
       "6,14,2": pickWallFacingFlavor,
       "10,1,1": pickWallFacingFlavor,
-      "10,1,3": pickWallFacingFlavor
+      "10,1,3": pickWallFacingFlavor,
+      "10,1,0": "通路の突き当たりの床に、ぽっかりと大きな穴が開いている。底は暗くて見通せない。"
     }
   },
   // フロア3(1,18・部屋A)の下り階段からつながる、フロア4。添付マップ(map-8.txt)を反映。
@@ -2834,6 +2838,7 @@ const AVAILABLE_IMAGE_FILES = new Set([
   "room_well.webp",
   "room_outside_sleep_bedding.webp",
   "room_hole.webp",
+  "room_pit.webp",
   "room_exile_leader.webp",
   "gate_entrance.webp",
   "wall_01.webp",
