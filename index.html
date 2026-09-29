@@ -281,48 +281,35 @@ body{display:flex;flex-direction:column;align-items:center;
   /* ══════════════════════════════════════════
      横長PC画面向けレイアウト（OOON本家 tt5_engine.html の
      「@media (min-width: 860px) 左ペイン固定幅＋右ペインflex」構成を移植）。
-     #dungeon-game/#left-pane/#right-paneは、狭い画面（モバイル）では
-     display:contentsで箱を作らず、既存の縦一列の並び（HUD→マップ→本文→
-     選択肢→能力値テスト）をそのまま維持する。広い画面でのみ、左に
-     HUD・ミニマップ・方向操作パッド、右に本文・選択肢を並べる2カラムに
-     切り替える。
+     モバイル向けのHTML構造・DOM順は一切変更せず（ラッパーdivも追加しない）、
+     広い画面でのみ#dungeon-screenをCSS Gridにして、#hudだけを右側の
+     サイドバー列（幅320px）へ、それ以外（画像・本文・選択肢・ミニマップ・
+     方向操作パッド等）はそのまま広いメイン列に残す。CSS Gridは行の高さを
+     同じ行にある全列で共有してしまうため、サイドバー列に複数要素を置くと
+     メイン列側に不要な空白ができてしまう。#hud単独だけをサイドバーに
+     置くことで、その問題を避けつつ「能力値などの右側表示」を実現している。
      ══════════════════════════════════════════ */
-  #dungeon-game, #left-pane, #right-pane { display: contents; }
-
   @media (min-width: 860px) {
-    #dungeon-screen { width: 100%; padding-bottom: 24px; }
-    #dungeon-game {
-      display: flex;
-      flex-direction: row;
-      align-items: flex-start;
-      gap: 20px;
+    #dungeon-screen {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      column-gap: 20px;
+      align-items: start;
       width: 100%;
       max-width: 1200px;
       margin: 0 auto;
+      padding-bottom: 24px;
     }
-    /* left-pane（HUD・マップ・方向操作パッド）と right-pane（画像・本文・選択肢）は、
-       画面上は右／左を入れ替えて表示する（それぞれの幅・中身はそのまま）。
-       HTML構造・要素IDは変えず、flexのorderだけで見た目の左右を反転させている。 */
-    #left-pane {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      width: 320px;
-      min-width: 320px;
-      flex-shrink: 0;
-      position: sticky;
-      top: 20px;
-      order: 2;
+    #hud {
+      grid-column: 2;
+      grid-row: 1;
     }
-    #right-pane {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-width: 0;
-      order: 1;
+    #viewArea, #debugInfo, #description, #shop-list, #combatArea,
+    #choices, #minimap-row {
+      grid-column: 1;
     }
-    #hud, #minimap, #viewArea, #debugInfo, #description,
-    #shop-list, #combatArea, #choices {
+    #hud, #viewArea, #debugInfo, #description,
+    #shop-list, #combatArea, #choices, #minimap-row {
       width: 100% !important;
       max-width: none !important;
     }
@@ -331,11 +318,12 @@ body{display:flex;flex-direction:column;align-items:center;
        画像・SVG・未用意プレースホルダーをすべてwidth:100%;height:100%にしてあるため、
        ここで#viewArea自体のサイズを広げるだけで中身も追従する） */
     #viewArea {
+      grid-row: 1;
       height: auto !important;
       aspect-ratio: 3 / 2;
     }
     /* 方向操作パッドは、モバイルでは画面下端に固定表示するが、
-       広い画面ではleft-pane内にミニマップと並べて常時表示する
+       広い画面では通常のブロックとして表示する
        （固定表示のままだと画面中央に浮いてしまうため解除する） */
     #nav-controls {
       position: static !important;
@@ -509,8 +497,6 @@ body{display:flex;flex-direction:column;align-items:center;
 </div>
 
 <div id="dungeon-screen" class="hidden">
-<div id="dungeon-game">
-<div id="left-pane">
 <div id="hud">
   <div class="mh-top">
     <div class="mh-name" id="mh-name">-</div>
@@ -523,16 +509,6 @@ body{display:flex;flex-direction:column;align-items:center;
   <div class="mh-bars" id="mh-bars"></div>
 </div>
 
-<div id="minimap"></div>
-
-<!-- 通路移動中の方向操作（前進／左右を向く／周囲を調べる）をアイコンボタンで表示する。
-     能力値テスト中はstartDiceTest()側でクリアされ、部屋・戦闘中はrender()冒頭でクリアされる。
-     モバイルでは画面下端に固定表示、横長PC画面ではlelf-paneにミニマップと並べて常時表示する
-     （#nav-controlsのCSS、@media (min-width: 860px)ブロック参照）。 -->
-<div id="nav-controls"></div>
-</div>
-
-<div id="right-pane">
 <div id="viewArea"></div>
 <div id="debugInfo"></div>
 <div id="description"></div>
@@ -548,15 +524,23 @@ body{display:flex;flex-direction:column;align-items:center;
 
 <div id="choices"></div>
 
-<!-- ダンジョン探索中の能力値テスト（落とし穴など）は画面遷移せず、選択肢の下にインライン表示する -->
-<div id="dice-test-inline" class="hidden">
+<div id="minimap-row" style="display:flex; align-items:flex-start; gap:12px; width:480px; max-width:94vw;">
+<div id="minimap"></div>
+
+<!-- 通路移動中の方向操作（前進／左右を向く／周囲を調べる）をアイコンボタンで表示する。
+     能力値テスト中はstartDiceTest()側でクリアされ、部屋・戦闘中はrender()冒頭でクリアされる。
+     モバイルでは画面下端に固定表示、横長PC画面ではサイドバー内に静的配置する
+     （#nav-controlsのCSS、@media (min-width: 860px)ブロック参照）。 -->
+<div id="nav-controls"></div>
+
+<!-- ダンジョン探索中の能力値テスト（落とし穴など）は画面遷移せず、ミニマップの右側にインライン表示する -->
+<div id="dice-test-inline" class="hidden" style="flex:1; min-width:0;">
  <div class="dice-area" style="padding:12px">
   <h3 style="font-size:calc(var(--font-sm) + 1px)"> 能力値テスト</h3>
   <div id="dd-inline" style="font-size:var(--font-base)"></div>
   <div class="dr-result" id="dres-inline" style="font-size:var(--font-base);min-height:28px">──  ──</div>
   <button class="roll-btn" id="rl-btn-inline" onclick="doRoll()" style="padding:10px;min-height:auto">▶ ROLL THE DICE!</button>
  </div>
-</div>
 </div>
 </div>
 </div>
