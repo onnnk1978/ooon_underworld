@@ -2839,6 +2839,7 @@ const AVAILABLE_IMAGE_FILES = new Set([
   "room_outside_sleep_bedding.webp",
   "room_hole.webp",
   "room_pit.webp",
+  "room_pit_junk.webp",
   "room_exile_leader.webp",
   "gate_entrance.webp",
   "wall_01.webp",
@@ -4806,6 +4807,19 @@ function render() {
       fetchBtn.textContent = '井戸から水を汲む';
       fetchBtn.onclick = () => fetchWellWater();
       choices.appendChild(fetchBtn);
+    }
+
+    // フロア3(10,1)の床の穴（北向き）でだけ「穴を覗く」を選べる。render()を
+    // 経由せず直接viewArea/descriptionを書き換えるだけの一時的な表示替えなので、
+    // 次に向きを変える／移動すると通常の穴の見た目（viewOverrides）に戻る。
+    if (!isDark && dungeonData.floor === 3 && posKey === '10,1' && player.facing === 0) {
+      const peekBtn = document.createElement('button');
+      peekBtn.textContent = '穴を覗く';
+      peekBtn.onclick = () => {
+        viewArea.innerHTML = imageOrPlaceholder('room_pit_junk.webp', '仮イラスト');
+        description.textContent = 'ガラクタがたくさん放り込まれている';
+      };
+      choices.appendChild(peekBtn);
     }
 
     // 方向操作はテキストボタンではなく、画面下端に固定表示するアイコンパッド（#nav-controls）に表示する。
