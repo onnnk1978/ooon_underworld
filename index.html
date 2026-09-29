@@ -3105,6 +3105,17 @@ function monsterRoll(mr){
   return { total: dice + flatBonus, diceCount, flatBonus };
 }
 
+// 敵のMR・体力は数値で表示せず、残量の割合に応じた言葉だけで様子を伝える
+// （PC自身の体力表示はこれまで通り数値のまま。戦闘UI・戦闘ログの両方で使う）。
+function enemyConditionLabel(curMR, mr){
+  if (curMR <= 0) return '戦闘不能';
+  const pct = mr > 0 ? curMR / mr * 100 : 0;
+  if (pct > 75) return '無傷';
+  if (pct > 50) return '手傷を負っている';
+  if (pct > 25) return '深手を負っている';
+  return '虫の息';
+}
+
 // ── プレイヤー側ロール：現状は素手（武器システム未実装）なのでd6+adds ──
 // diceMultiplier: 鋭き刃（vorpal）の効果で武器ダイスの本数を一時的に倍加する場合に指定する
 // diceMultiplier（鋭き刃／vorpalの効果）はOOON本家準拠で主武器（weapon）のダイスにのみ掛かる。
@@ -4846,7 +4857,7 @@ function resolveCombatRound(pcAction){
       const dmgToThis = perEnemy + (i === 0 ? remainder : 0);
       const actualDmg = Math.max(0, dmgToThis - (e.armor || 0));
       e.curMR = Math.max(0, e.curMR - actualDmg);
-      cs.log.push(`${e.name}に${actualDmg}ダメージ！（残りMR ${e.curMR}/${e.mr}）`);
+      cs.log.push(`${e.name}に${actualDmg}ダメージ！（${enemyConditionLabel(e.curMR, e.mr)}）`);
     });
   } else if (eTotal > partyTotal) {
     const rawDmg = eTotal - partyTotal;
@@ -4955,7 +4966,7 @@ function castMagicBolt(level, target){
   player.st -= cost;
   const dmg = player.iq * level;
   target.curMR = Math.max(0, target.curMR - dmg);
-  cs.log.push(`${player.name}は${sp.name} Lv${level}を唱えた！ ${target.name}に${dmg}ダメージ！（残りMR ${target.curMR}/${target.mr}／強さ-${cost}）`);
+  cs.log.push(`${player.name}は${sp.name} Lv${level}を唱えた！ ${target.name}に${dmg}ダメージ！（${enemyConditionLabel(target.curMR, target.mr)}／強さ-${cost}）`);
   cs.uiMode = 'action';
 
   if (cs.enemies.every(e => e.curMR <= 0)) {
@@ -4986,7 +4997,7 @@ function renderCombat() {
     const dead = e.curMR <= 0;
     const pct = e.mr > 0 ? Math.max(0, e.curMR / e.mr * 100) : 0;
     return `
-      <div class="hp-lbl" style="${dead ? 'color:#555' : ''}">${e.name}: MR ${Math.max(e.curMR,0)}/${e.mr}</div>
+      <div class="hp-lbl" style="${dead ? 'color:#555' : ''}">${e.name}: ${enemyConditionLabel(e.curMR, e.mr)}</div>
       <div class="hp-bar-wrap"><div class="hp-bar-fill enemy" style="width:${pct}%"></div></div>
     `;
   }).join('');
@@ -5125,7 +5136,7 @@ function renderCombat() {
     cs.enemies.filter(e => e.curMR > 0).forEach(e => {
       const btn = document.createElement('button');
       btn.className = 'choice-btn';
-      btn.textContent = `${e.name}（残りMR ${e.curMR}/${e.mr}）`;
+      btn.textContent = `${e.name}（${enemyConditionLabel(e.curMR, e.mr)}）`;
       btn.onclick = () => {
         castMagicBolt(cs.pendingTtyfLevel, e);
         render();
