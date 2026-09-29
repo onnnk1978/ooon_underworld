@@ -2567,7 +2567,10 @@ const DUNGEON_FLOORS = {
       // 東西を向くと南への開口によりcorner_left/corner_rightになってしまうため、
       // 他の行き止まり通路と同様に壁アップ画像＋壁のテキストに差し替える。
       "10,1,1": "wall_02.webp",
-      "10,1,3": "wall_03.webp"
+      "10,1,3": "wall_03.webp",
+      // 行き止まり（北向き）の足元には、平坦な壁ではなく床に大きな穴が
+      // 開いている専用の絵にする。
+      "10,1,0": "room_pit.webp"
     },
     tileFlavorByFacing: {
       "10,15,1": pickWallFacingFlavor,
@@ -2580,7 +2583,8 @@ const DUNGEON_FLOORS = {
       "6,14,0": pickWallFacingFlavor,
       "6,14,2": pickWallFacingFlavor,
       "10,1,1": pickWallFacingFlavor,
-      "10,1,3": pickWallFacingFlavor
+      "10,1,3": pickWallFacingFlavor,
+      "10,1,0": "通路の突き当たりの床に、ぽっかりと大きな穴が開いている。底は暗くて見通せない。"
     }
   },
   // フロア3(1,18・部屋A)の下り階段からつながる、フロア4。添付マップ(map-8.txt)を反映。
@@ -2834,6 +2838,8 @@ const AVAILABLE_IMAGE_FILES = new Set([
   "room_well.webp",
   "room_outside_sleep_bedding.webp",
   "room_hole.webp",
+  "room_pit.webp",
+  "room_pit_junk.webp",
   "room_exile_leader.webp",
   "gate_entrance.webp",
   "wall_01.webp",
@@ -4801,6 +4807,19 @@ function render() {
       fetchBtn.textContent = '井戸から水を汲む';
       fetchBtn.onclick = () => fetchWellWater();
       choices.appendChild(fetchBtn);
+    }
+
+    // フロア3(10,1)の床の穴（北向き）でだけ「穴を覗く」を選べる。render()を
+    // 経由せず直接viewArea/descriptionを書き換えるだけの一時的な表示替えなので、
+    // 次に向きを変える／移動すると通常の穴の見た目（viewOverrides）に戻る。
+    if (!isDark && dungeonData.floor === 3 && posKey === '10,1' && player.facing === 0) {
+      const peekBtn = document.createElement('button');
+      peekBtn.textContent = '穴を覗く';
+      peekBtn.onclick = () => {
+        viewArea.innerHTML = imageOrPlaceholder('room_pit_junk.webp', '仮イラスト');
+        description.textContent = 'ガラクタがたくさん放り込まれている';
+      };
+      choices.appendChild(peekBtn);
     }
 
     // 方向操作はテキストボタンではなく、画面下端に固定表示するアイコンパッド（#nav-controls）に表示する。
