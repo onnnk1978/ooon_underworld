@@ -300,6 +300,9 @@ body{display:flex;flex-direction:column;align-items:center;
       max-width: 1200px;
       margin: 0 auto;
     }
+    /* left-pane（HUD・マップ・方向操作パッド）と right-pane（画像・本文・選択肢）は、
+       画面上は右／左を入れ替えて表示する（それぞれの幅・中身はそのまま）。
+       HTML構造・要素IDは変えず、flexのorderだけで見た目の左右を反転させている。 */
     #left-pane {
       display: flex;
       flex-direction: column;
@@ -309,17 +312,27 @@ body{display:flex;flex-direction:column;align-items:center;
       flex-shrink: 0;
       position: sticky;
       top: 20px;
+      order: 2;
     }
     #right-pane {
       display: flex;
       flex-direction: column;
       flex: 1;
       min-width: 0;
+      order: 1;
     }
     #hud, #minimap, #viewArea, #debugInfo, #description,
     #shop-list, #combatArea, #choices {
       width: 100% !important;
       max-width: none !important;
+    }
+    /* シーン画像（#viewArea）は、広い画面では領域の横幅いっぱいまで拡大する。
+       縦横比（480:320=3:2）は保ったまま高さが伸びる（imageOrPlaceholder()側で
+       画像・SVG・未用意プレースホルダーをすべてwidth:100%;height:100%にしてあるため、
+       ここで#viewArea自体のサイズを広げるだけで中身も追従する） */
+    #viewArea {
+      height: auto !important;
+      aspect-ratio: 3 / 2;
     }
     /* 方向操作パッドは、モバイルでは画面下端に固定表示するが、
        広い画面ではleft-pane内にミニマップと並べて常時表示する
@@ -2770,9 +2783,9 @@ function preloadDungeonImages() {
 // 画像があれば<img>、なければプレースホルダーdivを表示するHTMLを組み立てる共通ヘルパー。
 // 実際に読み込みに失敗した場合（ファイル欠落など）もonerrorでプレースホルダーに切り替わる。
 function imageOrPlaceholder(filename, label, extraStyle) {
-  const style = `width:480px;height:320px;object-fit:cover;display:block;${extraStyle || ''}`;
+  const style = `width:100%;height:100%;object-fit:cover;display:block;${extraStyle || ''}`;
   const placeholder = `[${label}: ${filename} 未検出]`;
-  return `<img src="${imageUrl(filename)}" alt="${filename}" style="${style}" onerror="this.outerHTML='<div style=&quot;width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;&quot;>${placeholder}</div>'" />`;
+  return `<img src="${imageUrl(filename)}" alt="${filename}" style="${style}" onerror="this.outerHTML='<div style=&quot;width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;&quot;>${placeholder}</div>'" />`;
 }
 
 // ============================================================
@@ -2948,7 +2961,7 @@ function renderCorridorView(variant, flipped) {
   // バリエーションごとに色相を変えて「別カット」を演出（未用意パターンの仮表示）
   const hue = (variant.index * 47) % 360;
 
-  let svg = `<svg viewBox="0 0 480 320" width="480" height="320" style="${flipStyle}">`;
+  let svg = `<svg viewBox="0 0 480 320" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" style="${flipStyle}">`;
   svg += `<rect width="480" height="320" fill="hsl(${hue},20%,10%)" />`;
   svg += `<polygon points="140,80 340,80 300,160 180,160" fill="hsl(${hue},25%,25%)" stroke="#000" />`;
   svg += lOpen
@@ -3656,7 +3669,7 @@ function renderShop(){
 
   viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('shop_stall.webp')
     ? imageOrPlaceholder('shop_stall.webp', '露店')
-    : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[露店]</div>`;
+    : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[露店]</div>`;
   debugInfo.textContent = `所持金: ${formatMoney()}`;
   description.textContent = _shopMessage || '雑多な品を並べた露店だ。欲しいものはあるか。不要な武器は売ることもできる。';
   _shopMessage = null;
@@ -3847,7 +3860,7 @@ function renderLeaderMain(){
 
   viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('room_exile_leader.webp')
     ? imageOrPlaceholder('room_exile_leader.webp', '居住区リーダー')
-    : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_leader.webp 未用意]</div>`;
+    : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_leader.webp 未用意]</div>`;
   debugInfo.textContent = `居住区信頼度: ${(player.settlementTrust || 0).toFixed(1)}`;
   description.textContent = _leaderMessage || 'ドワーフは天幕の前でパイプをふかしている。「何か用か？」';
   _leaderMessage = null;
@@ -3890,7 +3903,7 @@ function renderLeaderQuests(){
 
   viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('room_exile_leader.webp')
     ? imageOrPlaceholder('room_exile_leader.webp', '居住区リーダー')
-    : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_leader.webp 未用意]</div>`;
+    : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_leader.webp 未用意]</div>`;
   debugInfo.textContent = `居住区信頼度: ${(player.settlementTrust || 0).toFixed(1)}`;
   description.textContent = _leaderMessage || 'ドワーフ「どんな仕事を手伝ってくれるってんだ？」';
   _leaderMessage = null;
@@ -4039,7 +4052,7 @@ function renderCompanionDialog(){
 
   viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has('room_exile_settlement.webp')
     ? imageOrPlaceholder('room_exile_settlement.webp', '居住区')
-    : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_settlement.webp 未用意]</div>`;
+    : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: room_exile_settlement.webp 未用意]</div>`;
   debugInfo.textContent = '';
 
   if (player.companion) {
@@ -4115,7 +4128,7 @@ function renderSleepMenu(){
   if (sleepImage) {
     viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(sleepImage)
       ? imageOrPlaceholder(sleepImage, '寝床')
-      : `<div style="width:480px;height:320px;background:#223;display:flex;align-items:center;justify-content:center;color:#aaa;">[睡眠]</div>`;
+      : `<div style="width:100%;height:100%;background:#223;display:flex;align-items:center;justify-content:center;color:#aaa;">[睡眠]</div>`;
     debugInfo.textContent = '';
   }
   description.textContent = sleepState.mode === 'outside'
@@ -4449,7 +4462,7 @@ function render() {
 
   // 罠などによるダンジョン内ゲームオーバー（戦闘死亡とは別経路）
   if (_dungeonGameOverMessage) {
-    viewArea.innerHTML = `<div style="width:480px;height:320px;background:#500;display:flex;align-items:center;justify-content:center;color:#fdd;">── ゲームオーバー ──</div>`;
+    viewArea.innerHTML = `<div style="width:100%;height:100%;background:#500;display:flex;align-items:center;justify-content:center;color:#fdd;">── ゲームオーバー ──</div>`;
     debugInfo.textContent = '';
     description.textContent = _dungeonGameOverMessage;
     const restartBtn = document.createElement('button');
@@ -4502,7 +4515,7 @@ function render() {
       if (room._resolved) {
         viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(room.settlementImage)
           ? imageOrPlaceholder(room.settlementImage, '部屋画像')
-          : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.settlementImage} 未用意]</div>`;
+          : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.settlementImage} 未用意]</div>`;
         debugInfo.textContent = `部屋: ${currentRoomId}（解決済み）`;
         if (_dungeonMessage) {
           description.textContent = _dungeonMessage;
@@ -4521,7 +4534,7 @@ function render() {
         const step = room.steps[room._step || 0];
         viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(room.image)
           ? imageOrPlaceholder(room.image, '部屋画像')
-          : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.image} 未用意]</div>`;
+          : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.image} 未用意]</div>`;
         debugInfo.textContent = `部屋: ${currentRoomId} / ステップ${room._step || 0}`;
         description.textContent = step.text;
         (step.choices || []).forEach(choice => {
@@ -4535,7 +4548,7 @@ function render() {
     } else {
       viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(room.image)
         ? imageOrPlaceholder(room.image, '部屋画像')
-        : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.image} 未用意]</div>`;
+        : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[部屋画像: ${room.image} 未用意]</div>`;
       debugInfo.textContent = `部屋: ${currentRoomId} / eventType: ${room.eventType}${room._resolved ? "（解決済み）" : ""}`;
       description.textContent = room.description;
 
@@ -4594,7 +4607,7 @@ function render() {
     } else {
       viewArea.innerHTML = AVAILABLE_IMAGE_FILES.has(stairsLink.image)
         ? imageOrPlaceholder(stairsLink.image, '階段画像')
-        : `<div style="width:480px;height:320px;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[階段画像: ${stairsLink.image} 未用意]</div>`;
+        : `<div style="width:100%;height:100%;background:#332;display:flex;align-items:center;justify-content:center;color:#aaa;">[階段画像: ${stairsLink.image} 未用意]</div>`;
       debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label}（階段）`;
       description.textContent = stairsLink.description;
 
@@ -4643,7 +4656,7 @@ function render() {
     }
 
     if (isDark) {
-      viewArea.innerHTML = `<div style="width:480px;height:320px;background:#000;display:flex;align-items:center;justify-content:center;color:#555;">[暗闇で何も見えない]</div>`;
+      viewArea.innerHTML = `<div style="width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;color:#555;">[暗闇で何も見えない]</div>`;
       debugInfo.textContent = `座標:(${player.x},${player.y}) 向き:${DIRS[player.facing].label}（暗闇・viewType:${viewType}）`;
     } else {
       viewArea.innerHTML = renderCorridorView(variant, imageFlipped);
