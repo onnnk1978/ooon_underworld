@@ -1892,6 +1892,77 @@ const AUTOSAVE_KEY = 'ooon_underworld_autosave';
 
 function getSaveKey(slot){ return SAVE_KEY_PREFIX + slot; }
 
+// ══════════════════════════════════════════════
+// 設定（文字サイズ）。ほぼ全画面のフォントサイズがCSS変数--font-baseからの
+// calc()で決まっているため、この変数を書き換えるだけで全体に反映される。
+// ══════════════════════════════════════════════
+const FONT_SIZE_KEY = 'ooon_underworld_font_size';
+const DEFAULT_FONT_BASE_PX = 14;
+const FONT_SIZE_PRESETS = [
+ { label: '小',   px: 12 },
+ { label: '標準', px: DEFAULT_FONT_BASE_PX },
+ { label: '大',   px: 16 },
+ { label: '特大', px: 18 },
+];
+function getFontBasePx(){
+ const saved = parseInt(localStorage.getItem(FONT_SIZE_KEY), 10);
+ return FONT_SIZE_PRESETS.some(p => p.px === saved) ? saved : DEFAULT_FONT_BASE_PX;
+}
+function applyFontBasePx(px){
+ document.documentElement.style.setProperty('--font-base', `${px}px`);
+}
+function setFontBasePx(px){
+ localStorage.setItem(FONT_SIZE_KEY, String(px));
+ applyFontBasePx(px);
+}
+applyFontBasePx(getFontBasePx());
+
+// セーブボタンから開くメニュー内の「設定」から呼ばれる設定パネル。
+// 現状は文字サイズのみだが、今後の設定項目もここに追加していく想定。
+function showSettingsPanel(){
+ const existing = document.getElementById('settings-panel');
+ if (existing) { existing.remove(); return; }
+
+ const panel = document.createElement('div');
+ panel.id = 'settings-panel';
+ panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--ink);border:2px solid var(--border);border-radius:6px;padding:16px;z-index:9998;min-width:260px;max-width:90vw;box-shadow:0 0 30px rgba(0,0,0,0.7);font-family:system-ui,sans-serif';
+
+ const title = document.createElement('div');
+ title.style.cssText = 'color:#e8e0d8;font-size:calc(var(--font-sm) - 1px);margin-bottom:10px;text-align:center';
+ title.textContent = '設定';
+ panel.appendChild(title);
+
+ const sectionLabel = document.createElement('div');
+ sectionLabel.style.cssText = 'color:var(--dim);font-size:calc(var(--font-sm) - 2px);margin-bottom:6px';
+ sectionLabel.textContent = '文字サイズ';
+ panel.appendChild(sectionLabel);
+
+ const row = document.createElement('div');
+ row.style.cssText = 'display:flex;gap:6px;margin-bottom:12px';
+ const current = getFontBasePx();
+ FONT_SIZE_PRESETS.forEach(preset => {
+  const btn = document.createElement('button');
+  btn.textContent = preset.label;
+  const active = preset.px === current;
+  btn.style.cssText = `flex:1;background:${active ? 'var(--white2)' : 'var(--panel2)'};border:1px solid var(--border);color:${active ? '#111' : 'var(--text)'};font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 1px);padding:8px 4px;cursor:pointer;border-radius:3px`;
+  btn.onclick = () => {
+   setFontBasePx(preset.px);
+   panel.remove();
+   showSettingsPanel();
+  };
+  row.appendChild(btn);
+ });
+ panel.appendChild(row);
+
+ const closeBtn = document.createElement('button');
+ closeBtn.textContent = '閉じる';
+ closeBtn.style.cssText = 'width:100%;background:none;border:1px solid var(--border);color:var(--dim);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 2px);padding:8px;cursor:pointer;border-radius:3px';
+ closeBtn.onclick = () => panel.remove();
+ panel.appendChild(closeBtn);
+
+ document.body.appendChild(panel);
+}
+
 function _captureFloorsState(){
  const floorsState = {};
  Object.keys(DUNGEON_FLOORS).forEach(floorNum => {
@@ -2160,6 +2231,16 @@ function showSaveSlotUI(mode){
   transferRow.appendChild(exportBtn);
   transferRow.appendChild(importBtn);
   panel.appendChild(transferRow);
+ }
+
+ // 設定（文字サイズ等）は、セーブボタンから開いたときのみ表示する
+ // （タイトル画面の「つづきから」＝ロード時は表示しない）。
+ if (mode === 'save') {
+  const settingsBtn = document.createElement('button');
+  settingsBtn.textContent = '設定';
+  settingsBtn.style.cssText = 'margin-top:8px;width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);font-family:system-ui,sans-serif;font-size:calc(var(--font-sm) - 2px);padding:8px;cursor:pointer;border-radius:3px';
+  settingsBtn.onclick = () => { panel.remove(); showSettingsPanel(); };
+  panel.appendChild(settingsBtn);
  }
 
  const cancelBtn = document.createElement('button');
