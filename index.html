@@ -4488,6 +4488,17 @@ function examineSurroundings(){
   advanceGameTime(MINUTES_PER_EXAMINE);
 
   const posKey = `${player.x},${player.y}`;
+
+  // フロア3(10,15)・南向き（突き当たり）限定：壁のブロックが緩んでいるのを発見する。
+  // 発見済みならchoices側に「ブロックを外す」ボタンが出る（render()参照）。
+  // 外し終えた後は、この座標特有の反応はもう出ない（通常のexamineCells/汎用文へ）。
+  if (dungeonData.floor === 3 && posKey === '10,15' && player.facing === 2 && !player._looseBlockRemoved) {
+    player._looseBlockFound = true;
+    _dungeonMessage = '突き当たりの壁のブロックが一部緩んでいる。';
+    render();
+    return;
+  }
+
   const cell = dungeonData.examineCells && dungeonData.examineCells[posKey];
 
   if (cell && cell.once && cell._resolved) {
@@ -4920,6 +4931,20 @@ function render() {
       fetchBtn.textContent = '井戸から水を汲む';
       fetchBtn.onclick = () => fetchWellWater();
       choices.appendChild(fetchBtn);
+    }
+
+    // フロア3(10,15)・南向き（突き当たり）で、examineSurroundings()により
+    // 壁のブロックの緩みを発見済み・かつ未除去のときだけ「ブロックを外す」を選べる。
+    if (!isDark && dungeonData.floor === 3 && posKey === '10,15' && player.facing === 2
+        && player._looseBlockFound && !player._looseBlockRemoved) {
+      const removeBlockBtn = document.createElement('button');
+      removeBlockBtn.textContent = 'ブロックを外す';
+      removeBlockBtn.onclick = () => {
+        player._looseBlockRemoved = true;
+        _dungeonMessage = '緩んでいる壁のブロックを外すと小さな空間があったが、特に何もなかった。';
+        render();
+      };
+      choices.appendChild(removeBlockBtn);
     }
 
     // フロア3(10,1)の床の穴（北向き）でだけ「穴を覗く」を選べる。render()を
